@@ -1,0 +1,25 @@
+# Build output
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Local configuration: contains database credentials and other machine-specific settings
+src/main/resources/application-local.properties
+src/main/resources/application-dev.properties
+src/main/resources/application-prod.properties
+
+# Secrets and environment overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
+/.idea/
