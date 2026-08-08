@@ -7,6 +7,11 @@ target/
 *.ipr
 *.iws
 
+# Local agent skills and installer cache
+.agents/
+skills-lock.json
+.npm-cache/
+
 # Local configuration: contains database credentials and other machine-specific settings
 src/main/resources/application-local.properties
 src/main/resources/application-dev.properties
