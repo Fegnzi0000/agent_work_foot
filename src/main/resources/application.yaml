@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: agent_work_foot
+  profiles:
+    active: dev
+
+server:
+  port: 8080
+
+app:
+  auth:
+    jwt:
+      issuer: agent-work-foot
+      active-key-id: current
+      access-token-ttl: PT15M
+      refresh-token-ttl: P7D
+    rate-limit:
+      login-max-attempts: 10
+      login-window: PT15M
+      register-max-attempts: 10
+      register-window: PT1H
+      refresh-max-attempts: 60
+      refresh-window: PT1M

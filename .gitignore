@@ -12,10 +12,9 @@ target/
 skills-lock.json
 .npm-cache/
 
-# Local configuration: contains database credentials and other machine-specific settings
-src/main/resources/application-local.properties
-src/main/resources/application-dev.properties
-src/main/resources/application-prod.properties
+# Environment configuration: contains database credentials and machine-specific settings
+src/main/resources/application-dev.yaml
+src/main/resources/application-prod.yaml
 
 # Secrets and environment overrides
 .env
@@ -28,3 +27,7 @@ src/main/resources/application-prod.properties
 .DS_Store
 Thumbs.db
 /.idea/
+
+.npm-cache/
+.agents/
+skills-lock.json
