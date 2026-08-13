@@ -3,9 +3,16 @@ spring:
     name: agent_work_foot
   profiles:
     active: dev
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
 
 server:
   port: 8080
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
 
 app:
   auth:

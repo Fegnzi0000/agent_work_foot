@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  偏好模块的数据访问映射，负责 preference_presets、preference_items 和 user_budget_histories。
+  所有变量均使用 #{...} 预编译绑定；预算读取按业务日期选择最近生效记录。
+-->
+<mapper namespace="com.hyf.agent_work_foot.preference.mapper.PreferenceMapper">
+    <!--
+      作用：读取全部启用的偏好预设。
+      输入：无。输出：PresetRow 列表。
+      逻辑：按分类和配置排序，供公开选项接口分组。
+    -->
+    <select id="selectActivePresets" resultType="com.hyf.agent_work_foot.preference.mapper.PreferenceMapper$PresetRow">
+        SELECT kind, code, label
+        FROM preference_presets
+        WHERE is_active = 1
+        ORDER BY kind, sort_order
+    </select>
+
+    <!--
+      作用：验证一个预设是否属于有效指定分类。
+      输入：kind、code。输出：PresetRow 或空。
+      逻辑：保存 PRESET 类型用户偏好前校验归属。
+    -->
+    <select id="selectActivePreset" resultType="com.hyf.agent_work_foot.preference.mapper.PreferenceMapper$PresetRow">
+        SELECT kind, code, label
+        FROM preference_presets
+        WHERE kind = #{kind}
+          AND code = #{code}
+          AND is_active = 1
+    </select>
+
+    <!--
+      作用：读取用户一个分类的偏好。
+      输入：userId、kind。输出：ItemRow 列表。
+      逻辑：只查询目标用户，按创建时间保持用户提交顺序。
+    -->
+    <select id="selectItems" resultType="com.hyf.agent_work_foot.preference.mapper.PreferenceMapper$ItemRow">
+        SELECT source_type AS sourceType,
+               preset_code AS presetCode,
+               custom_value AS customValue
+        FROM preference_items
+        WHERE user_id = #{userId}
+          AND kind = #{kind}
+        ORDER BY created_at
+    </select>
+
+    <!--
+      作用：清空用户一个分类的旧偏好。
+      输入：userId、kind。输出：影响行数由 MyBatis 忽略。
+      逻辑：与随后插入的新列表共同实现分类整体替换。
+    -->
+    <delete id="deleteItems">
+        DELETE FROM preference_items
+        WHERE user_id = #{userId}
+          AND kind = #{kind}
+    </delete>
+
+    <!--
+      作用：新增一条用户偏好。
+      输入：item。输出：影响一行。
+      逻辑：source_type 决定 preset_code 或 custom_value 哪个字段有值。
+    -->
+    <insert id="insertItem">
+        INSERT INTO preference_items (
+            id, user_id, kind, source_type, preset_code, custom_value, normalized_value
+        ) VALUES (
+            #{item.id}, #{item.userId}, #{item.kind}, #{item.sourceType}, #{item.presetCode},
+            #{item.customValue}, #{item.normalizedValue}
+        )
+    </insert>
+
+    <!--
+      作用：读取给定业务日期生效的最新预算。
+      输入：userId、businessDate。输出：BudgetRow 或空。
+      逻辑：只选择 effective_date 不晚于业务日期的最近一条历史。
+    -->
+    <select id="selectCurrentBudget" resultType="com.hyf.agent_work_foot.preference.mapper.PreferenceMapper$BudgetRow">
+        SELECT budget_enabled AS enabled,
+               daily_budget AS dailyBudget
+        FROM user_budget_histories
+        WHERE user_id = #{userId}
+          AND effective_date &lt;= #{businessDate}
+        ORDER BY effective_date DESC
+        LIMIT 1
+    </select>
+
+    <!--
+      作用：写入或覆盖当天预算历史。
+      输入：budget。输出：影响一行。
+      逻辑：同一用户、同一生效日期发生冲突时覆盖当天值，不影响其他日期历史。
+    -->
+    <insert id="upsertBudget">
+        INSERT INTO user_budget_histories (id, user_id, budget_enabled, daily_budget, effective_date)
+        VALUES (
+            #{budget.id}, #{budget.userId}, #{budget.enabled}, #{budget.dailyBudget}, #{budget.effectiveDate}
+        )
+        ON DUPLICATE KEY UPDATE
+            budget_enabled = VALUES(budget_enabled),
+            daily_budget = VALUES(daily_budget)
+    </insert>
+</mapper>

@@ -1,193 +1,226 @@
 package com.hyf.agent_work_foot.auth;
 
+import com.hyf.agent_work_foot.auth.mapper.AuthMapper;
 import com.hyf.agent_work_foot.common.ApiException;
+import com.hyf.agent_work_foot.common.AppConstants;
 import com.hyf.agent_work_foot.config.AuthProperties;
+import com.hyf.agent_work_foot.food.FoodInitializationService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.HexFormat;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.Arrays;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 认证用例服务。
+ *
+ * <p>编排注册、登录、Refresh Token 轮换和退出；所有持久化通过 AuthMapper 完成，不直接处理 HTTP 请求或 SQL。</p>
+ */
 @Service
 public class AuthService {
     private static final SecureRandom RANDOM = new SecureRandom();
-    private final JdbcTemplate jdbc;
+
+    private final AuthMapper mapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthProperties properties;
+    private final FoodInitializationService foodInitializationService;
 
-    public AuthService(JdbcTemplate jdbc, PasswordEncoder passwordEncoder, JwtService jwtService,
-                       AuthProperties properties) {
-        this.jdbc = jdbc;
+    /**
+     * 作用：注入认证流程依赖。
+     *
+     * <p>输入：数据访问、密码编码、JWT 与认证配置。输出：认证服务实例。
+     * 逻辑：保存依赖，具体业务在公开用例方法中执行。</p>
+     */
+    public AuthService(
+            AuthMapper mapper,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            AuthProperties properties,
+            FoodInitializationService foodInitializationService
+    ) {
+        this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.properties = properties;
+        this.foodInitializationService = foodInitializationService;
     }
 
+    /**
+     * 作用：注册用户并完成首次初始化。
+     *
+     * <p>输入：校验过格式的注册请求。输出：用户资料、Access Token、Refresh Token 与 ONBOARDING 指引。
+     * 逻辑：同一事务内校验邮箱、创建用户、复制默认食物并保存首个 Refresh Token，任一步失败都回滚。</p>
+     */
     @Transactional
     public AuthResponses.AuthData register(AuthRequests.RegisterRequest request) {
         if (!request.password().equals(request.confirmPassword())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "PASSWORD_CONFIRMATION_MISMATCH", "两次密码输入不一致");
         }
         String email = normalizeEmail(request.email());
-        if (jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE email = ?", Integer.class, email) > 0) {
+        if (mapper.countByEmail(email) > 0) {
             throw new ApiException(HttpStatus.CONFLICT, "EMAIL_ALREADY_REGISTERED", "邮箱已注册");
         }
 
-        UserRow user = new UserRow(UUID.randomUUID().toString(), email, defaultNickname(email), null,
-                "USER", "ACTIVE", false, false);
-        jdbc.update("""
-                INSERT INTO users (id, email, password_hash, nickname, role, status, onboarding_completed, must_change_password)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, user.id(), user.email(), passwordEncoder.encode(request.password()), user.nickname(), user.role(),
-                user.status(), user.onboardingCompleted(), user.mustChangePassword());
-        copyDefaultFoods(user.id());
-        return toAuthData(user, issueRefreshToken(user.id(), null));
+        AuthMapper.UserRow user = new AuthMapper.UserRow(
+                UUID.randomUUID().toString(),
+                email,
+                "干饭用户" + UUID.randomUUID().toString().substring(0, 8),
+                null,
+                AppConstants.ROLE_USER,
+                AppConstants.USER_STATUS_ACTIVE,
+                false,
+                false
+        );
+        mapper.insertUser(user, passwordEncoder.encode(request.password()));
+        foodInitializationService.initializeDefaults(user.id());
+        return authData(user, issueRefreshToken(user.id(), null));
     }
 
+    /**
+     * 作用：校验账号密码并创建新的登录会话。
+     *
+     * <p>输入：校验过格式的登录请求。输出：认证数据；账号不存在、禁用或密码不匹配时返回统一失败。
+     * 逻辑：按标准化邮箱读取用户，校验启用状态和 BCrypt 哈希，更新登录时间并签发 Token 对。</p>
+     */
     public AuthResponses.AuthData login(AuthRequests.LoginRequest request) {
-        UserRow user = findUserByEmail(normalizeEmail(request.email()));
-        if (user == null || !"ACTIVE".equals(user.status()) || !passwordMatches(request.password(), user.id())) {
+        AuthMapper.UserWithPassword found = mapper.selectUserByEmail(normalizeEmail(request.email()));
+        if (found == null
+                || !AppConstants.USER_STATUS_ACTIVE.equals(found.status())
+                || !passwordEncoder.matches(request.password(), found.passwordHash())) {
             throw unauthorized();
         }
-        jdbc.update("UPDATE users SET last_login_at = CURRENT_TIMESTAMP(3) WHERE id = ?", user.id());
-        return toAuthData(user, issueRefreshToken(user.id(), null));
+        mapper.updateLastLogin(found.id());
+        AuthMapper.UserRow user = new AuthMapper.UserRow(
+                found.id(),
+                found.email(),
+                found.nickname(),
+                found.avatarObjectKey(),
+                found.role(),
+                found.status(),
+                found.onboardingCompleted(),
+                found.mustChangePassword()
+        );
+        return authData(user, issueRefreshToken(user.id(), null));
     }
 
+    /**
+     * 作用：轮换一个有效 Refresh Token。
+     *
+     * <p>输入：客户端保存的 Refresh Token 原文。输出：新的 Access Token 与 Refresh Token。
+     * 逻辑：同一事务内校验摘要、撤销旧 Token、保存新 Token；旧 Token 不能再次使用。</p>
+     */
     @Transactional
-    public AuthResponses.TokenData refresh(String rawRefreshToken) {
-        RefreshTokenRow token = findRefreshToken(rawRefreshToken);
-        if (token == null || token.revokedAt() != null || !token.expiresAt().isAfter(Instant.now()) || !"ACTIVE".equals(token.status())) {
+    public AuthResponses.TokenData refresh(String rawToken) {
+        AuthMapper.RefreshTokenRow token = mapper.selectRefreshToken(hash(rawToken));
+        if (token == null
+                || token.revokedAt() != null
+                || !token.expiresAt().isAfter(Instant.now())
+                || !AppConstants.USER_STATUS_ACTIVE.equals(token.status())) {
             throw unauthorized();
         }
-        jdbc.update("UPDATE refresh_tokens SET revoked_at = CURRENT_TIMESTAMP(3), revoke_reason = 'ROTATED' WHERE id = ?", token.id());
-        RefreshTokenPair refreshed = issueRefreshToken(token.userId(), token.id());
-        return new AuthResponses.TokenData(jwtService.issueAccessToken(token.userId(), token.role()),
-                properties.jwt().accessTokenTtl().toSeconds(), refreshed.rawToken(), properties.jwt().refreshTokenTtl().toSeconds());
+        mapper.revokeById(token.id(), AppConstants.TOKEN_REVOKE_ROTATED);
+        RefreshTokenPair pair = issueRefreshToken(token.userId(), token.id());
+        return new AuthResponses.TokenData(
+                jwtService.issueAccessToken(token.userId(), token.role()),
+                properties.jwt().accessTokenTtl().toSeconds(),
+                pair.rawToken(),
+                properties.jwt().refreshTokenTtl().toSeconds()
+        );
     }
 
-    public void logout(String rawRefreshToken) {
-        int updated = jdbc.update("""
-                UPDATE refresh_tokens
-                SET revoked_at = CURRENT_TIMESTAMP(3), revoke_reason = 'LOGOUT'
-                WHERE token_hash = ? AND revoked_at IS NULL
-                """, hash(rawRefreshToken));
-        if (updated == 0) throw unauthorized();
+    /**
+     * 作用：退出当前设备会话。
+     *
+     * <p>输入：当前设备的 Refresh Token 原文。输出：无；Token 不存在或已撤销时返回统一认证失败。
+     * 逻辑：仅按摘要撤销一条未撤销 Token，不撤销该用户其他会话。</p>
+     */
+    public void logout(String rawToken) {
+        if (mapper.revokeByHash(hash(rawToken), AppConstants.TOKEN_REVOKE_LOGOUT) == 0) {
+            throw unauthorized();
+        }
     }
 
-    private AuthResponses.AuthData toAuthData(UserRow user, RefreshTokenPair refreshToken) {
-        return new AuthResponses.AuthData(jwtService.issueAccessToken(user.id(), user.role()),
-                properties.jwt().accessTokenTtl().toSeconds(), refreshToken.rawToken(), properties.jwt().refreshTokenTtl().toSeconds(),
-                new AuthResponses.UserData(user.id(), user.email(), user.nickname(), user.avatarObjectKey(), user.role(),
-                        user.status(), user.onboardingCompleted(), user.mustChangePassword()), nextStep(user));
+    /**
+     * 作用：组装注册或登录响应。
+     *
+     * <p>输入：已持久化的用户资料和新 Refresh Token。输出：完整认证响应。
+     * 逻辑：签发 Access Token、转换公开用户资料，并根据角色和引导状态确定下一步。</p>
+     */
+    private AuthResponses.AuthData authData(AuthMapper.UserRow user, RefreshTokenPair refreshToken) {
+        return new AuthResponses.AuthData(
+                jwtService.issueAccessToken(user.id(), user.role()),
+                properties.jwt().accessTokenTtl().toSeconds(),
+                refreshToken.rawToken(),
+                properties.jwt().refreshTokenTtl().toSeconds(),
+                new AuthResponses.UserData(
+                        user.id(), user.email(), user.nickname(), user.avatarObjectKey(), user.role(),
+                        user.status(), user.onboardingCompleted(), user.mustChangePassword()
+                ),
+                nextStep(user)
+        );
     }
 
-    private RefreshTokenPair issueRefreshToken(String userId, String parentTokenId) {
+    /**
+     * 作用：生成、摘要并保存新的 Refresh Token。
+     *
+     * <p>输入：归属用户 ID 和可为空的父 Token ID。输出：仅含原文的临时 Token 对象。
+     * 逻辑：随机生成 48 字节原文，仅将 SHA-256 摘要持久化，原文只在本次响应中返回。</p>
+     */
+    private RefreshTokenPair issueRefreshToken(String userId, String parentId) {
         byte[] value = new byte[48];
         RANDOM.nextBytes(value);
-        String rawToken = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(value);
-        jdbc.update("""
-                INSERT INTO refresh_tokens (id, user_id, token_hash, parent_token_id, expires_at)
-                VALUES (?, ?, ?, ?, ?)
-                """, UUID.randomUUID().toString(), userId, hash(rawToken), parentTokenId,
-                java.sql.Timestamp.from(Instant.now().plus(properties.jwt().refreshTokenTtl())));
-        return new RefreshTokenPair(rawToken);
+        String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(value);
+        mapper.insertRefreshToken(new AuthMapper.RefreshTokenInsert(
+                UUID.randomUUID().toString(),
+                userId,
+                hash(raw),
+                parentId,
+                Instant.now().plus(properties.jwt().refreshTokenTtl())
+        ));
+        return new RefreshTokenPair(raw);
     }
 
-    private void copyDefaultFoods(String userId) {
-        List<TemplateRow> templates = jdbc.query("""
-                SELECT name, normalized_name, category, default_price, tags_json
-                FROM food_default_templates WHERE is_active = 1 ORDER BY sort_order
-                """, (rs, rowNum) -> new TemplateRow(rs.getString("name"), rs.getString("normalized_name"),
-                rs.getString("category"), rs.getBigDecimal("default_price"), rs.getString("tags_json")));
-        for (TemplateRow template : templates) {
-            String foodId = UUID.randomUUID().toString();
-            jdbc.update("""
-                    INSERT INTO food_options (id, user_id, name, normalized_name, category, default_price, source, active_unique_key)
-                    VALUES (?, ?, ?, ?, ?, ?, 'DEFAULT', ?)
-                    """, foodId, userId, template.name(), template.normalizedName(), template.category(),
-                    template.defaultPrice(), template.normalizedName() + "|" + template.category());
-            for (String tag : readTags(template.tagsJson())) {
-                jdbc.update("INSERT INTO food_option_tags (id, food_option_id, tag, normalized_tag) VALUES (?, ?, ?, ?)",
-                        UUID.randomUUID().toString(), foodId, tag, tag.trim().toLowerCase(Locale.ROOT));
-            }
+    /** 作用：确定客户端完成认证后的下一页面。输入：用户资料。输出：页面状态字符串。逻辑：优先强制改密，再管理员页，最后按引导状态判断。 */
+    private String nextStep(AuthMapper.UserRow user) {
+        if (user.mustChangePassword()) {
+            return "CHANGE_PASSWORD";
         }
-    }
-
-    private List<String> readTags(String json) {
-        String content = json == null ? "" : json.trim();
-        if (content.length() < 2 || !content.startsWith("[") || !content.endsWith("]")) {
-            throw new IllegalStateException("默认食物标签数据无效");
+        if (AppConstants.ROLE_ADMIN.equals(user.role())) {
+            return "ADMIN_HOME";
         }
-        content = content.substring(1, content.length() - 1).trim();
-        if (content.isEmpty()) return List.of();
-        return Arrays.stream(content.split(","))
-                .map(String::trim)
-                .map(value -> value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")
-                        ? value.substring(1, value.length() - 1) : value)
-                .toList();
-    }
-
-    private UserRow findUserByEmail(String email) {
-        List<UserRow> users = jdbc.query("""
-                SELECT id, email, nickname, avatar_object_key, role, status, onboarding_completed, must_change_password
-                FROM users WHERE email = ?
-                """, (rs, rowNum) -> new UserRow(rs.getString("id"), rs.getString("email"), rs.getString("nickname"),
-                rs.getString("avatar_object_key"), rs.getString("role"), rs.getString("status"),
-                rs.getBoolean("onboarding_completed"), rs.getBoolean("must_change_password")), email);
-        return users.isEmpty() ? null : users.getFirst();
-    }
-
-    private boolean passwordMatches(String password, String userId) {
-        List<String> hashes = jdbc.query("SELECT password_hash FROM users WHERE id = ?", (rs, rowNum) -> rs.getString(1), userId);
-        return !hashes.isEmpty() && passwordEncoder.matches(password, hashes.getFirst());
-    }
-
-    private RefreshTokenRow findRefreshToken(String rawToken) {
-        List<RefreshTokenRow> tokens = jdbc.query("""
-                SELECT r.id, r.user_id, r.expires_at, r.revoked_at, u.role, u.status
-                FROM refresh_tokens r JOIN users u ON u.id = r.user_id
-                WHERE r.token_hash = ?
-                """, (rs, rowNum) -> new RefreshTokenRow(rs.getString("id"), rs.getString("user_id"),
-                rs.getTimestamp("expires_at").toInstant(), rs.getTimestamp("revoked_at") == null ? null : rs.getTimestamp("revoked_at").toInstant(),
-                rs.getString("role"), rs.getString("status")), hash(rawToken));
-        return tokens.isEmpty() ? null : tokens.getFirst();
-    }
-
-    private String nextStep(UserRow user) {
-        if (user.mustChangePassword()) return "CHANGE_PASSWORD";
-        if ("ADMIN".equals(user.role())) return "ADMIN_HOME";
         return user.onboardingCompleted() ? "HOME" : "ONBOARDING";
     }
 
-    private String normalizeEmail(String email) { return email.trim().toLowerCase(Locale.ROOT); }
-
-    private String defaultNickname(String email) {
-        return "干饭用户" + UUID.randomUUID().toString().substring(0, 8);
+    /** 作用：规范化邮箱。输入：原始邮箱。输出：去首尾空格并转小写的邮箱。逻辑：统一注册、登录和限流键的比较口径。 */
+    private String normalizeEmail(String email) {
+        return email.trim().toLowerCase(Locale.ROOT);
     }
 
+    /** 作用：计算敏感 Token 的 SHA-256 摘要。输入：原文。输出：十六进制摘要。逻辑：数据库只保存摘要，算法不可用时中止流程。 */
     private String hash(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
+            );
         } catch (Exception exception) {
             throw new IllegalStateException("无法计算令牌摘要", exception);
         }
     }
 
-    private ApiException unauthorized() { return new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS", "邮箱或密码错误"); }
+    /** 作用：创建统一登录凭据失败异常。输入：无。输出：AUTH_INVALID_CREDENTIALS 异常。逻辑：不暴露账号、密码或 Token 的具体失败原因。 */
+    private ApiException unauthorized() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS", "邮箱或密码错误");
+    }
 
-    private record UserRow(String id, String email, String nickname, String avatarObjectKey, String role, String status,
-                           boolean onboardingCompleted, boolean mustChangePassword) { }
-    private record TemplateRow(String name, String normalizedName, String category, java.math.BigDecimal defaultPrice, String tagsJson) { }
-    private record RefreshTokenRow(String id, String userId, Instant expiresAt, Instant revokedAt, String role, String status) { }
-    private record RefreshTokenPair(String rawToken) { }
+    /** 仅在服务内部传递新生成的 Refresh Token 原文，避免将原文写入持久化对象。 */
+    private record RefreshTokenPair(String rawToken) {
+    }
 }

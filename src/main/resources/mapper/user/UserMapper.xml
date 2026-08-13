@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  用户模块的数据访问映射，负责当前认证用户资料和引导状态。
+  userId 必须来自 JWT 安全上下文，所有变量使用 #{...} 预编译绑定。
+-->
+<mapper namespace="com.hyf.agent_work_foot.user.mapper.UserMapper">
+    <!--
+      作用：按用户 ID 读取公开资料。
+      输入：userId。输出：UserRow 或空。
+      逻辑：只选择接口需要的资料和账号状态，不返回 password_hash。
+    -->
+    <select id="selectById" resultType="com.hyf.agent_work_foot.auth.mapper.AuthMapper$UserRow">
+        SELECT id,
+               email,
+               nickname,
+               avatar_object_key AS avatarObjectKey,
+               role,
+               status,
+               onboarding_completed AS onboardingCompleted,
+               must_change_password AS mustChangePassword
+        FROM users
+        WHERE id = #{userId}
+    </select>
+
+    <!--
+      作用：修改一个当前用户的昵称。
+      输入：userId、nickname。输出：影响一行。
+      逻辑：用户归属由服务从 JWT 传入，不提供任意用户筛选能力。
+    -->
+    <update id="updateNickname">
+        UPDATE users
+        SET nickname = #{nickname}
+        WHERE id = #{userId}
+    </update>
+
+    <!--
+      作用：标记用户首次引导已完成。
+      输入：userId。输出：影响一行。
+      逻辑：只更新 onboarding_completed，不修改偏好和预算数据。
+    -->
+    <update id="completeOnboarding">
+        UPDATE users
+        SET onboarding_completed = 1
+        WHERE id = #{userId}
+    </update>
+
+    <!--
+      作用：修改账号状态。
+      输入：userId、status。输出：影响行数。
+      逻辑：供账号安全及后续管理员用例使用，状态值由 Service 或测试夹具提供。
+    -->
+    <update id="updateStatus">
+        UPDATE users
+        SET status = #{status}
+        WHERE id = #{userId}
+    </update>
+</mapper>

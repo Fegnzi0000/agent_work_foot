@@ -5,28 +5,48 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.List;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/**
+ * Bearer JWT 认证 Filter。
+ *
+ * <p>校验 Access Token 后将用户 ID 和角色写入 Security Context；不直接输出错误，由 Spring Security 统一处理未认证请求。</p>
+ */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
+    private final RolePermissionResolver permissionResolver;
 
-    public JwtAuthenticationFilter(JwtService jwtService) { this.jwtService = jwtService; }
+    /** 作用：注入 JWT 服务。输入：Token 签发与校验服务。输出：Filter 实例。逻辑：保存依赖。 */
+    public JwtAuthenticationFilter(JwtService jwtService, RolePermissionResolver permissionResolver) {
+        this.jwtService = jwtService;
+        this.permissionResolver = permissionResolver;
+    }
 
+    /**
+     * 作用：提取并验证请求中的 Bearer Access Token。
+     *
+     * <p>输入：请求、响应和后续 Filter 链。输出：无直接返回值；验证成功时 Security Context 包含当前用户。
+     * 逻辑：只处理 Bearer 头，校验失败则清空上下文，继续链路以交给认证入口返回统一错误。</p>
+     */
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.startsWith("Bearer ")) {
             try {
                 JwtService.AccessToken token = jwtService.verifyAccessToken(authorization.substring(7));
-                var authentication = new UsernamePasswordAuthenticationToken(token.userId(), null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + token.role())));
+                var authentication = new UsernamePasswordAuthenticationToken(
+                        token.userId(),
+                        null,
+                        permissionResolver.resolve(token.role())
+                );
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (RuntimeException ignored) {
                 SecurityContextHolder.clearContext();

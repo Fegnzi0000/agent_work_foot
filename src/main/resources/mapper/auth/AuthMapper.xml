@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  认证模块的数据访问映射，只负责 users与refresh_tokens；食物表由food模块拥有。
+  所有运行时变量只能使用 #{...} 预编译绑定；禁止使用 ${...} 和 SQL 字符串拼接。
+-->
+<mapper namespace="com.hyf.agent_work_foot.auth.mapper.AuthMapper">
+    <!--
+      作用：统计邮箱对应用户数量。
+      输入：email（标准化邮箱）。输出：long 数量。
+      逻辑：注册前用于判断邮箱是否已存在。
+    -->
+    <select id="countByEmail" resultType="long">
+        SELECT COUNT(*)
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+    <!--
+      作用：新增注册用户及密码哈希。
+      输入：user、passwordHash。输出：影响一行。
+      逻辑：不持久化密码明文，其他初始化数据由服务后续写入。
+    -->
+    <insert id="insertUser">
+        INSERT INTO users (
+            id, email, password_hash, nickname, role, status, onboarding_completed, must_change_password
+        ) VALUES (
+            #{user.id}, #{user.email}, #{passwordHash}, #{user.nickname}, #{user.role}, #{user.status},
+            #{user.onboardingCompleted}, #{user.mustChangePassword}
+        )
+    </insert>
+
+    <!--
+      作用：按邮箱读取登录校验资料。
+      输入：email。输出：UserWithPassword 或空。
+      逻辑：额外返回 passwordHash，仅供认证服务进行密码比对。
+    -->
+    <select id="selectUserByEmail" resultType="com.hyf.agent_work_foot.auth.mapper.AuthMapper$UserWithPassword">
+        SELECT id,
+               email,
+               password_hash AS passwordHash,
+               nickname,
+               avatar_object_key AS avatarObjectKey,
+               role,
+               status,
+               onboarding_completed AS onboardingCompleted,
+               must_change_password AS mustChangePassword
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+    <!--
+      作用：更新一次成功登录时间。
+      输入：userId。输出：影响一行。
+      逻辑：不更新密码、角色或账号状态。
+    -->
+    <update id="updateLastLogin">
+        UPDATE users
+        SET last_login_at = CURRENT_TIMESTAMP(3)
+        WHERE id = #{userId}
+    </update>
+
+    <!--
+      作用：按 Refresh Token 摘要读取会话和用户状态。
+      输入：tokenHash。输出：RefreshTokenRow 或空。
+      逻辑：联表一次返回轮换所需的过期、撤销、角色和账号状态。
+    -->
+    <select id="selectRefreshToken" resultType="com.hyf.agent_work_foot.auth.mapper.AuthMapper$RefreshTokenRow">
+        SELECT r.id,
+               r.user_id AS userId,
+               r.expires_at AS expiresAt,
+               r.revoked_at AS revokedAt,
+               u.role,
+               u.status
+        FROM refresh_tokens r
+        JOIN users u ON u.id = r.user_id
+        WHERE r.token_hash = #{tokenHash}
+    </select>
+
+    <!--
+      作用：保存新 Refresh Token 的摘要。
+      输入：token。输出：影响一行。
+      逻辑：原文不会进入数据库，可选 parentTokenId 用于追溯轮换链。
+    -->
+    <insert id="insertRefreshToken">
+        INSERT INTO refresh_tokens (id, user_id, token_hash, parent_token_id, expires_at)
+        VALUES (#{token.id}, #{token.userId}, #{token.tokenHash}, #{token.parentTokenId}, #{token.expiresAt})
+    </insert>
+
+    <!--
+      作用：按 ID 撤销 Token。
+      输入：tokenId、reason。输出：影响一行。
+      逻辑：Refresh Token 轮换时标记旧 Token。
+    -->
+    <update id="revokeById">
+        UPDATE refresh_tokens
+        SET revoked_at = CURRENT_TIMESTAMP(3),
+            revoke_reason = #{reason}
+        WHERE id = #{tokenId}
+    </update>
+
+    <!--
+      作用：按摘要撤销仍有效 Token。
+      输入：tokenHash、reason。输出：影响行数。
+      逻辑：退出流程以影响行数判断 Token 是否真实存在且尚未撤销。
+    -->
+    <update id="revokeByHash">
+        UPDATE refresh_tokens
+        SET revoked_at = CURRENT_TIMESTAMP(3),
+            revoke_reason = #{reason}
+        WHERE token_hash = #{tokenHash}
+          AND revoked_at IS NULL
+    </update>
+
+</mapper>
