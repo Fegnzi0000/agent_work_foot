@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- food_options复杂查询；所有变量使用#{...}预编译绑定，禁止${...}。 -->
+<mapper namespace="com.hyf.agent_work_foot.food.mapper.FoodOptionMapper">
+    <!-- 作用：按用户分页查询有效食物；输入：筛选和分页；输出：FoodPageRow页；逻辑：标签使用GROUP BY/HAVING实现AND。 -->
+    <select id="selectFoodPage" resultType="com.hyf.agent_work_foot.food.mapper.model.FoodPageRow">
+        SELECT f.id, f.name, f.category, f.default_price AS defaultPrice, f.source
+        FROM food_options f
+        WHERE f.user_id = #{userId}
+          AND f.deleted_at IS NULL
+        <if test="keyword != null">
+          AND f.normalized_name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+        </if>
+        <if test="category != null">
+          AND LOWER(TRIM(f.category)) LIKE CONCAT('%', #{category}, '%') ESCAPE '\\'
+        </if>
+        <if test="tags != null and !tags.isEmpty()">
+          AND f.id IN (
+            SELECT t.food_option_id
+            FROM food_option_tags t
+            WHERE t.normalized_tag IN
+            <foreach collection="tags" item="tag" open="(" separator="," close=")">#{tag}</foreach>
+            GROUP BY t.food_option_id
+            HAVING COUNT(DISTINCT t.normalized_tag) = #{tagCount}
+          )
+        </if>
+        ORDER BY f.normalized_name ASC, f.id ASC
+    </select>
+
+    <!-- 作用：按归属读取有效食物；输入：userId、foodId；输出：Entity或空；逻辑：隐藏已删和跨用户资源。 -->
+    <select id="selectOwnedActive" resultType="com.hyf.agent_work_foot.food.entity.FoodOptionEntity">
+        SELECT * FROM food_options WHERE id = #{foodId} AND user_id = #{userId} AND deleted_at IS NULL
+    </select>
+
+    <!-- 作用：锁定有效食物；输入：userId、foodId；输出：Entity或空；逻辑：FOR UPDATE串行化标签整体替换。 -->
+    <select id="selectOwnedActiveForUpdate" resultType="com.hyf.agent_work_foot.food.entity.FoodOptionEntity">
+        SELECT * FROM food_options WHERE id = #{foodId} AND user_id = #{userId} AND deleted_at IS NULL FOR UPDATE
+    </select>
+
+    <!-- 作用：检测另一条有效食物是否占用唯一键；输入：用户、键、可空排除ID；输出：数量。 -->
+    <select id="countDuplicate" resultType="long">
+        SELECT COUNT(*) FROM food_options
+        WHERE user_id = #{userId} AND active_unique_key = #{activeKey} AND deleted_at IS NULL
+        <if test="excludeId != null">AND id != #{excludeId}</if>
+    </select>
+
+    <!-- 作用：软删除归属食物；输入：用户、ID、UTC时间；输出：影响行数；逻辑：清空唯一键允许重建。 -->
+    <update id="softDelete">
+        UPDATE food_options SET deleted_at = #{deletedAt}, active_unique_key = NULL, updated_at = #{deletedAt}
+        WHERE id = #{foodId} AND user_id = #{userId} AND deleted_at IS NULL
+    </update>
+
+    <!--
+      作用：更新锁定后的有效食物主表字段。
+      输入：userId、food。输出：影响行数。
+      逻辑：再次限制归属和未删除状态；全部变量使用预编译绑定。
+    -->
+    <update id="updateOwnedActive">
+        UPDATE food_options
+        SET name = #{food.name},
+            normalized_name = #{food.normalizedName},
+            category = #{food.category},
+            default_price = #{food.defaultPrice},
+            active_unique_key = #{food.activeUniqueKey},
+            updated_at = #{food.updatedAt}
+        WHERE id = #{food.id}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+</mapper>

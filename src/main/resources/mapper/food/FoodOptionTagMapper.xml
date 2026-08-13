@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- food_option_tags复杂批量操作；所有变量使用#{...}。 -->
+<mapper namespace="com.hyf.agent_work_foot.food.mapper.FoodOptionTagMapper">
+    <!-- 作用：批量写入标签；输入：tags；输出：影响行数；逻辑：一次INSERT写入最多50项。 -->
+    <insert id="insertBatch">
+        INSERT INTO food_option_tags (id, food_option_id, tag, normalized_tag, created_at) VALUES
+        <foreach collection="tags" item="item" separator=",">
+            (#{item.id}, #{item.foodOptionId}, #{item.tag}, #{item.normalizedTag}, #{item.createdAt})
+        </foreach>
+    </insert>
+
+    <!-- 作用：批量取得标签；输入：foodIds；输出：FoodTagRow；逻辑：稳定按规范标签名和ID排序。 -->
+    <select id="selectByFoodIds" resultType="com.hyf.agent_work_foot.food.mapper.model.FoodTagRow">
+        SELECT id, food_option_id AS foodOptionId, tag, normalized_tag AS normalizedTag
+        FROM food_option_tags
+        WHERE food_option_id IN
+        <foreach collection="foodIds" item="foodId" open="(" separator="," close=")">#{foodId}</foreach>
+        ORDER BY normalized_tag ASC, id ASC
+    </select>
+
+    <!-- 作用：物理删除一个有效食物的标签配置；输入：foodId；输出：影响行数；逻辑：仅PATCH替换时调用。 -->
+    <delete id="deleteByFoodId">DELETE FROM food_option_tags WHERE food_option_id = #{foodId}</delete>
+</mapper>
