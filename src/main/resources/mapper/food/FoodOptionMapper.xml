@@ -44,6 +44,13 @@
         <if test="excludeId != null">AND id != #{excludeId}</if>
     </select>
 
+    <!-- 作用：读取占用有效唯一键的食物 ID；输入：用户和唯一键；输出：可空 ID；逻辑：不更新重复食物。 -->
+    <select id="selectDuplicateId" resultType="string">
+        SELECT id FROM food_options
+        WHERE user_id = #{userId} AND active_unique_key = #{activeKey} AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
     <!-- 作用：软删除归属食物；输入：用户、ID、UTC时间；输出：影响行数；逻辑：清空唯一键允许重建。 -->
     <update id="softDelete">
         UPDATE food_options SET deleted_at = #{deletedAt}, active_unique_key = NULL, updated_at = #{deletedAt}

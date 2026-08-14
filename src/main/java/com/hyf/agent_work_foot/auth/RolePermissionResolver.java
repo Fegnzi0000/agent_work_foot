@@ -29,6 +29,11 @@ public class RolePermissionResolver {
             authorities.add(new SimpleGrantedAuthority(AppPermissions.FOOD_CREATE));
             authorities.add(new SimpleGrantedAuthority(AppPermissions.FOOD_UPDATE));
             authorities.add(new SimpleGrantedAuthority(AppPermissions.FOOD_DELETE));
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.DIET_LIST));
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.DIET_CREATE));
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.DIET_UPDATE));
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.DIET_DELETE));
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.DIET_STATISTICS));
         }
         return List.copyOf(authorities);
     }

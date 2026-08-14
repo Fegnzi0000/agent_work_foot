@@ -123,6 +123,33 @@ public class FoodService {
         if (foodMapper.softDelete(userId, foodId, LocalDateTime.now(clock)) == 0) throw notFound();
     }
 
+    /**
+     * 作用：为手工饮食记录解析或创建可关联食物。
+     * 输入：用户、已提交的食物内容与本次实际价格。输出：有效食物 ID。
+     * 逻辑：重复项直接关联且不更新；新项以CUSTOM来源和本次价格创建，调用者事务负责与饮食记录原子提交。
+     */
+    public String resolveOrCreateForManualRecord(String userId, String name, String category, List<String> tags,
+                                                 BigDecimal actualPrice) {
+        PreparedFood prepared = prepare(name, category, actualPrice.toPlainString(), tags);
+        FoodOptionEntity existing = foodMapper.selectOwnedActive(userId, findDuplicateId(userId, prepared.activeKey()));
+        if (existing != null) {
+            return existing.getId();
+        }
+        FoodOptionEntity entity = entity(userId, prepared, FoodConstants.SOURCE_CUSTOM);
+        try {
+            foodMapper.insert(entity);
+            insertTags(entity.getId(), prepared.tags());
+            return entity.getId();
+        } catch (DuplicateKeyException exception) {
+            String id = findDuplicateId(userId, prepared.activeKey());
+            FoodOptionEntity conflicted = id == null ? null : foodMapper.selectOwnedActive(userId, id);
+            if (conflicted != null) {
+                return conflicted.getId();
+            }
+            throw exception;
+        }
+    }
+
     /** 作用：规范化并校验完整写入内容。输入：原始四字段。输出：PreparedFood。逻辑：先限制原始标签数，再内容与价格校验。 */
     private PreparedFood prepare(String nameInput, String categoryInput, String priceInput, List<String> tagInput) {
         if (tagInput == null) throw validation("tags", "不能为null");
@@ -152,6 +179,11 @@ public class FoodService {
         if (foodMapper.countDuplicate(userId, key, excludeId) > 0) {
             throw duplicate();
         }
+    }
+
+    /** 作用：读取已占用唯一键的食物 ID。输入：用户与唯一键。输出：可空ID。逻辑：为手工记录的重复关联提供最小查询。 */
+    private String findDuplicateId(String userId, String key) {
+        return foodMapper.selectDuplicateId(userId, key);
     }
 
     /** 作用：构造待新增主表实体。输入：用户、已校验食物和来源。输出：带 UUID 的实体。逻辑：不在此处写数据库。 */

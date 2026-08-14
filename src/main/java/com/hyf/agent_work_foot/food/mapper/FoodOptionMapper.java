@@ -26,6 +26,9 @@ public interface FoodOptionMapper extends BaseMapper<FoodOptionEntity> {
     long countDuplicate(@Param("userId") String userId, @Param("activeKey") String activeKey,
                         @Param("excludeId") String excludeId);
 
+    /** 作用：读取占用有效唯一键的食物ID。输入：用户和唯一键。输出：可空ID。逻辑：手工记录加入食物池时复用既有项。 */
+    String selectDuplicateId(@Param("userId") String userId, @Param("activeKey") String activeKey);
+
     /** 作用：条件软删除食物。输入：归属、ID和UTC时间。输出：影响行数。逻辑：同时清空有效唯一键。 */
     int softDelete(@Param("userId") String userId, @Param("foodId") String foodId,
                    @Param("deletedAt") LocalDateTime deletedAt);

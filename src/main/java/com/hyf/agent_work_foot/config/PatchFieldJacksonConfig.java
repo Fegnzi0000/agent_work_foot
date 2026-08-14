@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.hyf.agent_work_foot.common.PatchField;
+import com.hyf.agent_work_foot.diet.DietRequests;
 import com.hyf.agent_work_foot.food.FoodRequests;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class PatchFieldJacksonConfig {
     private static final Set<String> FOOD_PATCH_FIELDS = Set.of("name", "category", "defaultPrice", "tags");
+    private static final Set<String> DIET_PATCH_FIELDS = Set.of("foodOptionId", "manualFood", "actualPrice", "mealType", "eatenAt");
 
     /** 作用：注册PatchField模块。输入：无。输出：Jackson Module。逻辑：为包装类型提供上下文泛型解析器。 */
     @Bean
@@ -36,6 +38,7 @@ public class PatchFieldJacksonConfig {
         SimpleModule module = new SimpleModule("PatchFieldModule");
         module.addDeserializer(PatchField.class, new PatchFieldDeserializer(null));
         module.addDeserializer(FoodRequests.FoodPatchRequest.class, new FoodPatchRequestDeserializer());
+        module.addDeserializer(DietRequests.PatchRequest.class, new DietPatchRequestDeserializer());
         return module;
     }
 
@@ -167,6 +170,41 @@ public class PatchFieldJacksonConfig {
                 }
             }
             return PatchField.of(Collections.unmodifiableList(tags));
+        }
+    }
+
+    /** Diet PATCH 专用解析器，保证食物二选一字段可区分缺失、null与有效值。 */
+    private static final class DietPatchRequestDeserializer extends JsonDeserializer<DietRequests.PatchRequest> {
+        @Override
+        public DietRequests.PatchRequest deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+            JsonNode root = parser.readValueAsTree();
+            if (!root.isObject()) return (DietRequests.PatchRequest) context.handleUnexpectedToken(DietRequests.PatchRequest.class, parser);
+            Iterator<String> names = root.fieldNames();
+            while (names.hasNext()) { String name = names.next(); if (!DIET_PATCH_FIELDS.contains(name)) context.reportInputMismatch(DietRequests.PatchRequest.class, "未知字段: %s", name); }
+            return new DietRequests.PatchRequest(string(root, "foodOptionId", context), manual(root, context),
+                    string(root, "actualPrice", context), string(root, "mealType", context), time(root, context));
+        }
+
+        private PatchField<String> string(JsonNode root, String name, DeserializationContext context) throws IOException {
+            if (!root.has(name)) return PatchField.undefined(); JsonNode node = root.get(name);
+            if (node.isNull()) return PatchField.of(null);
+            if (!node.isTextual()) context.reportInputMismatch(DietRequests.PatchRequest.class, "%s 必须是字符串", name);
+            return PatchField.of(node.textValue());
+        }
+
+        private PatchField<DietRequests.ManualFood> manual(JsonNode root, DeserializationContext context) throws IOException {
+            if (!root.has("manualFood")) return PatchField.undefined(); JsonNode node = root.get("manualFood");
+            if (node.isNull()) return PatchField.of(null);
+            if (!node.isObject()) context.reportInputMismatch(DietRequests.PatchRequest.class, "manualFood 必须是对象");
+            return PatchField.of(context.readTreeAsValue(node, DietRequests.ManualFood.class));
+        }
+
+        private PatchField<java.time.OffsetDateTime> time(JsonNode root, DeserializationContext context) throws IOException {
+            if (!root.has("eatenAt")) return PatchField.undefined(); JsonNode node = root.get("eatenAt");
+            if (node.isNull()) return PatchField.of(null);
+            if (!node.isTextual()) context.reportInputMismatch(DietRequests.PatchRequest.class, "eatenAt 必须是带时区的时间字符串");
+            try { return PatchField.of(java.time.OffsetDateTime.parse(node.textValue())); }
+            catch (java.time.format.DateTimeParseException exception) { context.reportInputMismatch(DietRequests.PatchRequest.class, "eatenAt 格式不正确"); return PatchField.undefined(); }
         }
     }
 }
