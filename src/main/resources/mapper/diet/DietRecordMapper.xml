@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- diet_records复杂查询；负责用户归属、快照分页、统计和软删除，所有参数只使用#{...}。 -->
+<mapper namespace="com.hyf.agent_work_foot.diet.mapper.DietRecordMapper">
+    <resultMap id="DietRecordRowMap" type="com.hyf.agent_work_foot.diet.mapper.model.DietRecordRow">
+        <constructor>
+            <idArg column="id" javaType="string"/>
+            <arg column="food_option_id" javaType="string"/>
+            <arg column="food_name_snapshot" javaType="string"/>
+            <arg column="category_snapshot" javaType="string"/>
+            <arg column="tags_snapshot_json" javaType="java.util.List" typeHandler="com.hyf.agent_work_foot.food.mapper.JsonStringListTypeHandler"/>
+            <arg column="actual_price" javaType="java.math.BigDecimal"/>
+            <arg column="meal_type" javaType="string"/>
+            <arg column="eaten_at" javaType="java.time.LocalDateTime"/>
+            <arg column="business_date" javaType="java.time.LocalDate"/>
+            <arg column="source" javaType="string"/>
+            <arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <!-- 作用：映射可更新饮食实体；逻辑：显式为JSON标签字段绑定TypeHandler，避免PATCH读出null。 -->
+    <resultMap id="DietRecordEntityMap" type="com.hyf.agent_work_foot.diet.entity.DietRecordEntity">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="foodOptionId" column="food_option_id"/>
+        <result property="foodNameSnapshot" column="food_name_snapshot"/>
+        <result property="categorySnapshot" column="category_snapshot"/>
+        <result property="tagsSnapshotJson" column="tags_snapshot_json" typeHandler="com.hyf.agent_work_foot.food.mapper.JsonStringListTypeHandler"/>
+        <result property="actualPrice" column="actual_price"/>
+        <result property="mealType" column="meal_type"/>
+        <result property="eatenAt" column="eaten_at"/>
+        <result property="businessDate" column="business_date"/>
+        <result property="source" column="source"/>
+        <result property="sourceReferenceId" column="source_reference_id"/>
+        <result property="deletedAt" column="deleted_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- 作用：分页查询当前用户未删除的历史快照；输入：日期、餐次、分类、来源和分页；输出：稳定排序的记录页。 -->
+    <select id="selectPage" resultMap="DietRecordRowMap">
+        SELECT id, food_option_id, food_name_snapshot, category_snapshot, tags_snapshot_json, actual_price,
+               meal_type, eaten_at, business_date, source, created_at, updated_at
+        FROM diet_records
+        WHERE user_id = #{userId} AND deleted_at IS NULL
+          AND business_date BETWEEN #{startDate} AND #{endDate}
+        <if test="mealType != null">AND meal_type = #{mealType}</if>
+        <if test="category != null">AND LOWER(TRIM(category_snapshot)) LIKE CONCAT('%', #{category}, '%') ESCAPE '\\'</if>
+        <if test="source != null">AND source = #{source}</if>
+        ORDER BY eaten_at DESC, id DESC
+    </select>
+
+    <!-- 作用：锁定当前用户未删除记录；输入：用户和记录ID；输出：实体或空；逻辑：PATCH串行化写入。 -->
+    <select id="selectOwnedActiveForUpdate" resultMap="DietRecordEntityMap">
+        SELECT * FROM diet_records
+        WHERE id = #{recordId} AND user_id = #{userId} AND deleted_at IS NULL
+        FOR UPDATE
+    </select>
+
+    <!-- 作用：更新锁定后的饮食快照和业务字段；输入：用户和实体；输出：影响行数；逻辑：再次限制归属与未删除状态。 -->
+    <update id="updateOwnedActive">
+        UPDATE diet_records
+        SET food_option_id = #{record.foodOptionId},
+            food_name_snapshot = #{record.foodNameSnapshot},
+            category_snapshot = #{record.categorySnapshot},
+            tags_snapshot_json = #{record.tagsSnapshotJson, typeHandler=com.hyf.agent_work_foot.food.mapper.JsonStringListTypeHandler},
+            actual_price = #{record.actualPrice}, meal_type = #{record.mealType}, eaten_at = #{record.eatenAt},
+            business_date = #{record.businessDate}, updated_at = #{record.updatedAt}
+        WHERE id = #{record.id} AND user_id = #{userId} AND deleted_at IS NULL
+    </update>
+
+    <!-- 作用：软删除当前用户记录；输入：用户、记录ID、UTC时间；输出：影响行数。 -->
+    <update id="softDelete">
+        UPDATE diet_records SET deleted_at = #{deletedAt}, updated_at = #{deletedAt}
+        WHERE id = #{recordId} AND user_id = #{userId} AND deleted_at IS NULL
+    </update>
+
+    <!-- 作用：统计总消费、记录数和有记录天数；输入：用户与业务日期范围；输出：单行汇总。 -->
+    <select id="selectSummary" resultType="com.hyf.agent_work_foot.diet.mapper.model.DietSummaryRow">
+        SELECT COALESCE(SUM(actual_price), 0) AS totalSpent, COUNT(*) AS recordCount,
+               COUNT(DISTINCT business_date) AS recordedDays
+        FROM diet_records
+        WHERE user_id = #{userId} AND deleted_at IS NULL AND business_date BETWEEN #{startDate} AND #{endDate}
+    </select>
+
+    <!-- 作用：按日、月或年聚合有效消费；输入：日期范围与groupBy；输出：仅有记录的周期，Service补零。 -->
+    <select id="selectSeries" resultType="com.hyf.agent_work_foot.diet.mapper.model.DietSeriesRow">
+        SELECT CASE #{groupBy}
+            WHEN 'DAY' THEN DATE_FORMAT(business_date, '%Y-%m-%d')
+            WHEN 'MONTH' THEN DATE_FORMAT(business_date, '%Y-%m')
+            ELSE DATE_FORMAT(business_date, '%Y')
+        END AS period, SUM(actual_price) AS totalSpent
+        FROM diet_records
+        WHERE user_id = #{userId} AND deleted_at IS NULL AND business_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY period ORDER BY period ASC
+    </select>
+
+    <!-- 作用：聚合分类消费；输入：用户与日期范围；输出：未分类统一名称的分类行；逻辑：按记录数和名称稳定排序。 -->
+    <select id="selectCategoryDistribution" resultType="com.hyf.agent_work_foot.diet.mapper.model.DietCategoryRow">
+        SELECT COALESCE(NULLIF(category_snapshot, ''), '未分类') AS category,
+               SUM(actual_price) AS totalSpent, COUNT(*) AS recordCount
+        FROM diet_records
+        WHERE user_id = #{userId} AND deleted_at IS NULL AND business_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY COALESCE(NULLIF(category_snapshot, ''), '未分类')
+        ORDER BY recordCount DESC, category ASC
+    </select>
+</mapper>
