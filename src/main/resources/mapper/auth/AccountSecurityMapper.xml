@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 账号安全状态与会话批量撤销；所有变量使用#{...}预编译绑定，禁止动态字符串SQL。 -->
+<mapper namespace="com.hyf.agent_work_foot.auth.mapper.AccountSecurityMapper">
+    <!-- 作用：读取JWT校验状态；输入：用户ID；输出：角色、状态、安全版本和强制改密标记。 -->
+    <select id="selectAccessState" resultType="com.hyf.agent_work_foot.auth.mapper.AccountSecurityMapper$AccessState">
+        SELECT id,
+               role,
+               status,
+               auth_version AS authVersion,
+               must_change_password AS mustChangePassword
+        FROM users
+        WHERE id = #{userId}
+    </select>
+
+    <!-- 作用：锁定改密或注销目标；输入：用户ID；输出：账号凭据状态。 -->
+    <select id="selectForUpdate" resultType="com.hyf.agent_work_foot.auth.mapper.AccountSecurityMapper$LockedAccount">
+        SELECT id,
+               password_hash AS passwordHash,
+               status,
+               auth_version AS authVersion,
+               must_change_password AS mustChangePassword
+        FROM users
+        WHERE id = #{userId}
+        FOR UPDATE
+    </select>
+
+    <!-- 作用：原子更新密码并使旧JWT失效；输入：用户、哈希和版本；输出：影响行数。 -->
+    <update id="updatePassword">
+        UPDATE users
+        SET password_hash = #{passwordHash},
+            must_change_password = 0,
+            auth_version = auth_version + 1
+        WHERE id = #{userId}
+          AND status = 'ACTIVE'
+          AND auth_version = #{expectedVersion}
+    </update>
+
+    <!-- 作用：原子软注销并使旧JWT失效；输入：用户、版本和UTC时间；输出：影响行数。 -->
+    <update id="cancelAccount">
+        UPDATE users
+        SET status = 'CANCELLED',
+            cancelled_at = #{cancelledAt},
+            auth_version = auth_version + 1
+        WHERE id = #{userId}
+          AND status = 'ACTIVE'
+          AND auth_version = #{expectedVersion}
+    </update>
+
+    <!-- 作用：撤销全部未撤销Refresh Token；输入：用户、时间和原因；输出：影响行数。 -->
+    <update id="revokeAllRefreshTokens">
+        UPDATE refresh_tokens
+        SET revoked_at = #{revokedAt},
+            revoke_reason = #{reason}
+        WHERE user_id = #{userId}
+          AND revoked_at IS NULL
+    </update>
+
+    <!-- 作用：撤销全部未使用临时密码；输入：用户和时间；输出：影响行数。 -->
+    <update id="revokeTemporaryPasswords">
+        UPDATE temporary_passwords
+        SET revoked_at = #{revokedAt}
+        WHERE user_id = #{userId}
+          AND used_at IS NULL
+          AND revoked_at IS NULL
+    </update>
+
+    <!-- 作用：进入强制改密状态并使旧JWT失效；输入：用户和版本；输出：影响行数。 -->
+    <update id="requirePasswordChange">
+        UPDATE users
+        SET must_change_password = 1,
+            auth_version = auth_version + 1
+        WHERE id = #{userId}
+          AND status = 'ACTIVE'
+          AND auth_version = #{expectedVersion}
+    </update>
+</mapper>
