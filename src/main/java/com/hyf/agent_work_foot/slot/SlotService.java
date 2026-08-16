@@ -1,10 +1,10 @@
 package com.hyf.agent_work_foot.slot;
 
 import com.hyf.agent_work_foot.common.ApiException;
+import com.hyf.agent_work_foot.common.MoneyParser;
 import com.hyf.agent_work_foot.config.SlotProperties;
 import com.hyf.agent_work_foot.diet.DietResponses;
 import com.hyf.agent_work_foot.diet.DietService;
-import com.hyf.agent_work_foot.food.FoodPriceParser;
 import com.hyf.agent_work_foot.food.FoodQueryService;
 import com.hyf.agent_work_foot.slot.entity.SlotSpinEntity;
 import com.hyf.agent_work_foot.slot.mapper.SlotSpinMapper;
@@ -32,13 +32,13 @@ public class SlotService {
     private final SlotRandomSelector selector;
     private final SlotRateLimiter rateLimiter;
     private final SlotProperties properties;
-    private final FoodPriceParser priceParser;
+    private final MoneyParser priceParser;
     private final Clock clock;
 
     /** 作用：注入Slot全部模块边界。输入：Mapper、Food/Diet服务、随机、限流、配置、金额格式器和时钟。输出：服务实例。 */
     public SlotService(SlotSpinMapper mapper, FoodQueryService foodQueryService, DietService dietService,
                        SlotRandomSelector selector, SlotRateLimiter rateLimiter, SlotProperties properties,
-                       FoodPriceParser priceParser, Clock clock) {
+                       MoneyParser priceParser, Clock clock) {
         this.mapper = mapper;
         this.foodQueryService = foodQueryService;
         this.dietService = dietService;

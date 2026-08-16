@@ -47,6 +47,13 @@ class DietHttpContractTests extends AbstractMySqlIntegrationTest {
         assertEquals("20.00", json(statistics).path("data").path("totalSpent").asText());
         assertEquals(31, json(statistics).path("data").path("spendingSeries").size());
 
+        MvcResult yearlyStatistics = perform(MockMvcRequestBuilders.get("/api/v1/diet-records/statistics")
+                .param("startDate", "2026-01-01").param("endDate", "2026-12-31").param("groupBy", "YEAR"), null, token);
+        assertEquals(200, yearlyStatistics.getResponse().getStatus());
+        assertEquals(12, json(yearlyStatistics).path("data").path("spendingSeries").size());
+        assertEquals("2026-08", json(yearlyStatistics).path("data").path("spendingSeries").get(7).path("period").asText());
+        assertEquals("20.00", json(yearlyStatistics).path("data").path("spendingSeries").get(7).path("totalSpent").asText());
+
         assertEquals(204, perform(MockMvcRequestBuilders.delete("/api/v1/diet-records/{id}", id), null, token).getResponse().getStatus());
         assertEquals(0, json(perform(MockMvcRequestBuilders.get("/api/v1/diet-records")
                 .param("startDate", "2026-08-01").param("endDate", "2026-08-31"), null, token))

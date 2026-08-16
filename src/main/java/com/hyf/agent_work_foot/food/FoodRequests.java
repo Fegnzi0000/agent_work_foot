@@ -2,7 +2,9 @@ package com.hyf.agent_work_foot.food;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.hyf.agent_work_foot.common.PatchField;
+import com.hyf.agent_work_foot.common.StrictStringDeserializer;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
@@ -12,7 +14,8 @@ public final class FoodRequests {
 
     /** 创建食物请求，四个字段均必须出现，tags可为空数组。 */
     public record FoodWriteRequest(@NotNull String name, @NotNull String category,
-                                   @NotNull String defaultPrice, @NotNull List<String> tags) { }
+                                   @NotNull @JsonDeserialize(using = StrictStringDeserializer.class) String defaultPrice,
+                                   @NotNull List<String> tags) { }
 
     /** PATCH请求，通过JsonCreator读取字段是否出现并保留显式null。 */
     public static final class FoodPatchRequest {

@@ -89,13 +89,17 @@
         WHERE user_id = #{userId} AND deleted_at IS NULL AND business_date BETWEEN #{startDate} AND #{endDate}
     </select>
 
-    <!-- 作用：按日、月或年聚合有效消费；输入：日期范围与groupBy；输出：仅有记录的周期，Service补零。 -->
+    <!-- 作用：按日、月或年视图聚合有效消费；YEAR按月返回有记录天数的日均金额，Service负责补零。 -->
     <select id="selectSeries" resultType="com.hyf.agent_work_foot.diet.mapper.model.DietSeriesRow">
         SELECT CASE #{groupBy}
             WHEN 'DAY' THEN DATE_FORMAT(business_date, '%Y-%m-%d')
             WHEN 'MONTH' THEN DATE_FORMAT(business_date, '%Y-%m')
-            ELSE DATE_FORMAT(business_date, '%Y')
-        END AS period, SUM(actual_price) AS totalSpent
+            ELSE DATE_FORMAT(business_date, '%Y-%m')
+        END AS period,
+        CASE #{groupBy}
+            WHEN 'YEAR' THEN SUM(actual_price) / COUNT(DISTINCT business_date)
+            ELSE SUM(actual_price)
+        END AS totalSpent
         FROM diet_records
         WHERE user_id = #{userId} AND deleted_at IS NULL AND business_date BETWEEN #{startDate} AND #{endDate}
         GROUP BY period ORDER BY period ASC

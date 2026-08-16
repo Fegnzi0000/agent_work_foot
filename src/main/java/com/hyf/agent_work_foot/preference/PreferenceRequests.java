@@ -1,12 +1,11 @@
 package com.hyf.agent_work_foot.preference;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.hyf.agent_work_foot.common.StrictStringDeserializer;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -31,7 +30,7 @@ public final class PreferenceRequests {
     public record OnboardingRequest(
             @Size(max = 20) String nickname,
             @NotNull Boolean budgetEnabled,
-            @DecimalMin("0") @DecimalMax("100000") BigDecimal dailyBudget,
+            @JsonDeserialize(using = StrictStringDeserializer.class) String dailyBudget,
             @NotNull @Size(max = 50) List<@Valid PreferenceItem> medicalAllergies,
             @NotNull @Size(max = 50) List<@Valid PreferenceItem> dietaryRestrictions,
             @NotNull @Size(max = 50) List<@Valid PreferenceItem> dislikes,
@@ -42,7 +41,7 @@ public final class PreferenceRequests {
     /** 偏好补丁请求：所有字段可省略；出现的列表将整体替换对应分类。 */
     public record PreferencesPatchRequest(
             Boolean budgetEnabled,
-            @DecimalMin("0") @DecimalMax("100000") BigDecimal dailyBudget,
+            @JsonDeserialize(using = StrictStringDeserializer.class) String dailyBudget,
             @Size(max = 50) List<@Valid PreferenceItem> medicalAllergies,
             @Size(max = 50) List<@Valid PreferenceItem> dietaryRestrictions,
             @Size(max = 50) List<@Valid PreferenceItem> dislikes,

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.FieldErrorDetail;
+import com.hyf.agent_work_foot.common.MoneyParser;
 import com.hyf.agent_work_foot.common.PatchField;
 import com.hyf.agent_work_foot.food.entity.FoodOptionEntity;
 import com.hyf.agent_work_foot.food.entity.FoodOptionTagEntity;
@@ -30,7 +31,7 @@ public class FoodService {
     private final FoodOptionMapper foodMapper;
     private final FoodOptionTagMapper tagMapper;
     private final FoodNormalizer normalizer;
-    private final FoodPriceParser priceParser;
+    private final MoneyParser priceParser;
     private final FoodContentValidator validator;
     private final Clock clock;
 
@@ -40,7 +41,7 @@ public class FoodService {
      * 逻辑：保存模块依赖，所有公开用例统一经这些组件访问数据和规则。
      */
     public FoodService(FoodOptionMapper foodMapper, FoodOptionTagMapper tagMapper, FoodNormalizer normalizer,
-                       FoodPriceParser priceParser, FoodContentValidator validator, Clock clock) {
+                       MoneyParser priceParser, FoodContentValidator validator, Clock clock) {
         this.foodMapper = foodMapper;
         this.tagMapper = tagMapper;
         this.normalizer = normalizer;

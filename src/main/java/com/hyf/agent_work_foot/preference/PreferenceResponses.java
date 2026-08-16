@@ -1,6 +1,5 @@
 package com.hyf.agent_work_foot.preference;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +20,7 @@ public final class PreferenceResponses {
     /** 当前用户完整偏好与当前生效预算。 */
     public record PreferencesData(
             boolean budgetEnabled,
-            BigDecimal dailyBudget,
+            String dailyBudget,
             List<PreferenceItem> medicalAllergies,
             List<PreferenceItem> dietaryRestrictions,
             List<PreferenceItem> dislikes,

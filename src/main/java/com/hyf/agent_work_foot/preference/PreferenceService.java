@@ -2,6 +2,7 @@ package com.hyf.agent_work_foot.preference;
 
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.AppConstants;
+import com.hyf.agent_work_foot.common.MoneyParser;
 import com.hyf.agent_work_foot.preference.mapper.PreferenceMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -30,10 +31,12 @@ public class PreferenceService {
     );
 
     private final PreferenceMapper mapper;
+    private final MoneyParser moneyParser;
 
     /** 作用：注入偏好数据访问接口。输入：PreferenceMapper。输出：服务实例。逻辑：保存依赖。 */
-    public PreferenceService(PreferenceMapper mapper) {
+    public PreferenceService(PreferenceMapper mapper, MoneyParser moneyParser) {
         this.mapper = mapper;
+        this.moneyParser = moneyParser;
     }
 
     /**
@@ -72,7 +75,7 @@ public class PreferenceService {
     public void submitOnboarding(String userId, PreferenceRequests.OnboardingRequest request) {
         validateBudget(request.budgetEnabled(), request.dailyBudget());
         if (request.budgetEnabled()) {
-            upsertBudget(userId, true, request.dailyBudget());
+            upsertBudget(userId, true, parseBudget(request.dailyBudget()));
         }
         replaceItems(userId, "MEDICAL_ALLERGY", request.medicalAllergies());
         replaceItems(userId, "DIETARY_RESTRICTION", request.dietaryRestrictions());
@@ -95,13 +98,13 @@ public class PreferenceService {
             upsertBudget(
                     userId,
                     request.budgetEnabled(),
-                    request.budgetEnabled() ? request.dailyBudget() : null
+                    request.budgetEnabled() ? parseBudget(request.dailyBudget()) : null
             );
         } else if (request.dailyBudget() != null) {
             if (!currentBudget(userId).enabled()) {
                 throw validation("未启用预算时不能设置每日预算");
             }
-            upsertBudget(userId, true, request.dailyBudget());
+            upsertBudget(userId, true, parseBudget(request.dailyBudget()));
         }
         replaceWhenPresent(userId, "MEDICAL_ALLERGY", request.medicalAllergies());
         replaceWhenPresent(userId, "DIETARY_RESTRICTION", request.dietaryRestrictions());
@@ -170,7 +173,7 @@ public class PreferenceService {
     private PreferenceResponses.PreferencesData data(String userId, PreferenceMapper.BudgetRow budget) {
         return new PreferenceResponses.PreferencesData(
                 budget.enabled(),
-                budget.dailyBudget(),
+                budget.dailyBudget() == null ? null : moneyParser.format(budget.dailyBudget()),
                 items(userId, "MEDICAL_ALLERGY"),
                 items(userId, "DIETARY_RESTRICTION"),
                 items(userId, "DISLIKE"),
@@ -203,13 +206,23 @@ public class PreferenceService {
     }
 
     /** 作用：校验预算开关与金额组合。输入：开关和可为空金额。输出：无或校验异常。逻辑：启用必须有金额，关闭必须不带金额。 */
-    private void validateBudget(boolean enabled, BigDecimal dailyBudget) {
+    private void validateBudget(boolean enabled, String dailyBudget) {
         if (enabled && dailyBudget == null) {
             throw validation("启用预算时必须填写每日预算");
         }
         if (!enabled && dailyBudget != null) {
             throw validation("未启用预算时每日预算必须为空");
         }
+    }
+
+    /**
+     * 作用：解析每日预算的 HTTP 金额字符串。
+     * 输入：可为空的请求字段 dailyBudget。
+     * 输出：两位 BigDecimal，或金额格式校验异常。
+     * 逻辑：仅在预算已启用时由调用方触发，持久化前统一收敛金额精度。
+     */
+    private BigDecimal parseBudget(String dailyBudget) {
+        return moneyParser.parse(dailyBudget, "dailyBudget", "每日预算");
     }
 
     /** 作用：创建偏好参数校验异常。输入：面向客户端的说明。输出：VALIDATION_FAILED 异常。逻辑：统一使用 400 和稳定错误码。 */

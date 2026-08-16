@@ -2,7 +2,9 @@ package com.hyf.agent_work_foot.diet;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.hyf.agent_work_foot.common.PatchField;
+import com.hyf.agent_work_foot.common.StrictStringDeserializer;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -15,7 +17,8 @@ public final class DietRequests {
 
     /** 创建饮食记录请求；foodOptionId与manualFood严格二选一。 */
     public record CreateRequest(String foodOptionId, ManualFood manualFood, Boolean addToFoodPool,
-                                String actualPrice, String mealType, OffsetDateTime eatenAt) { }
+                                @JsonDeserialize(using = StrictStringDeserializer.class) String actualPrice,
+                                String mealType, OffsetDateTime eatenAt) { }
 
     /** PATCH请求的三态字段模型；自定义反序列化器负责保留缺失与显式null。 */
     public static final class PatchRequest {

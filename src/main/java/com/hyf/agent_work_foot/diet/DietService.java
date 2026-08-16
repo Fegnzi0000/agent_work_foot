@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.FieldErrorDetail;
+import com.hyf.agent_work_foot.common.MoneyParser;
 import com.hyf.agent_work_foot.common.PatchField;
 import com.hyf.agent_work_foot.diet.entity.DietRecordEntity;
 import com.hyf.agent_work_foot.diet.mapper.DietRecordMapper;
@@ -13,7 +14,6 @@ import com.hyf.agent_work_foot.diet.mapper.model.DietSeriesRow;
 import com.hyf.agent_work_foot.diet.mapper.model.DietSummaryRow;
 import com.hyf.agent_work_foot.food.FoodContentValidator;
 import com.hyf.agent_work_foot.food.FoodNormalizer;
-import com.hyf.agent_work_foot.food.FoodPriceParser;
 import com.hyf.agent_work_foot.food.FoodQueryService;
 import com.hyf.agent_work_foot.food.FoodService;
 import java.math.BigDecimal;
@@ -47,12 +47,12 @@ public class DietService {
     private final FoodService foodService;
     private final FoodNormalizer normalizer;
     private final FoodContentValidator contentValidator;
-    private final FoodPriceParser priceParser;
+    private final MoneyParser priceParser;
     private final Clock clock;
 
     public DietService(DietRecordMapper mapper, FoodQueryService foodQueryService, FoodService foodService,
                        FoodNormalizer normalizer, FoodContentValidator contentValidator,
-                       FoodPriceParser priceParser, Clock clock) {
+                       MoneyParser priceParser, Clock clock) {
         this.mapper = mapper;
         this.foodQueryService = foodQueryService;
         this.foodService = foodService;
@@ -164,7 +164,7 @@ public class DietService {
         if (mapper.softDelete(userId, recordId, LocalDateTime.now(clock)) == 0) throw notFound();
     }
 
-    /** 作用：统计指定日期范围消费。输入：用户、范围和粒度。输出：总览、补零趋势和分类分布。逻辑：只聚合未删除记录。 */
+    /** 作用：统计指定日期范围消费。输入：用户、范围和粒度。输出：总览、补零趋势和分类分布。逻辑：DAY按日总额，MONTH按月总额，YEAR按月计算有记录天数的日均金额。 */
     public DietResponses.DietStatisticsData statistics(String userId, LocalDate startDate, LocalDate endDate, String groupBy) {
         DateRange range = range(startDate, endDate, false);
         if (!GROUPS.contains(groupBy)) throw validation("groupBy", "必须是DAY、MONTH或YEAR");
@@ -224,9 +224,9 @@ public class DietService {
 
     private List<String> periods(DateRange range, String groupBy) {
         List<String> result = new ArrayList<>(); LocalDate cursor = range.start(); DateTimeFormatter format = switch (groupBy) {
-            case "DAY" -> DateTimeFormatter.ISO_LOCAL_DATE; case "MONTH" -> DateTimeFormatter.ofPattern("yyyy-MM"); default -> DateTimeFormatter.ofPattern("yyyy"); };
+            case "DAY" -> DateTimeFormatter.ISO_LOCAL_DATE; default -> DateTimeFormatter.ofPattern("yyyy-MM"); };
         while (!cursor.isAfter(range.end())) { String value = format.format(cursor); if (result.isEmpty() || !result.getLast().equals(value)) result.add(value);
-            cursor = switch (groupBy) { case "DAY" -> cursor.plusDays(1); case "MONTH" -> cursor.withDayOfMonth(1).plusMonths(1); default -> cursor.withDayOfYear(1).plusYears(1); }; }
+            cursor = switch (groupBy) { case "DAY" -> cursor.plusDays(1); default -> cursor.withDayOfMonth(1).plusMonths(1); }; }
         return result;
     }
 

@@ -1,6 +1,7 @@
 package com.hyf.agent_work_foot.food;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.hyf.agent_work_foot.common.MoneyParser;
 import com.hyf.agent_work_foot.food.entity.FoodDefaultTemplateEntity;
 import com.hyf.agent_work_foot.food.entity.FoodOptionEntity;
 import com.hyf.agent_work_foot.food.entity.FoodOptionTagEntity;
@@ -21,12 +22,12 @@ public class FoodInitializationService {
     private final FoodOptionTagMapper tagMapper;
     private final FoodNormalizer normalizer;
     private final FoodContentValidator validator;
-    private final FoodPriceParser priceParser;
+    private final MoneyParser priceParser;
     private final Clock clock;
 
     public FoodInitializationService(FoodDefaultTemplateMapper templateMapper, FoodOptionMapper foodMapper,
                                      FoodOptionTagMapper tagMapper, FoodNormalizer normalizer,
-                                     FoodContentValidator validator, FoodPriceParser priceParser, Clock clock) {
+                                     FoodContentValidator validator, MoneyParser priceParser, Clock clock) {
         this.templateMapper = templateMapper;
         this.foodMapper = foodMapper;
         this.tagMapper = tagMapper;

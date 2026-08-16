@@ -1,5 +1,7 @@
 package com.hyf.agent_work_foot.slot;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.hyf.agent_work_foot.common.StrictStringDeserializer;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -13,5 +15,6 @@ public final class SlotRequests {
     public record SpinRequest(UUID previousSpinId) { }
 
     /** 确认请求；金额、餐次和时间由Diet统一校验。 */
-    public record ConfirmRequest(String actualPrice, String mealType, OffsetDateTime eatenAt) { }
+    public record ConfirmRequest(@JsonDeserialize(using = StrictStringDeserializer.class) String actualPrice,
+                                 String mealType, OffsetDateTime eatenAt) { }
 }

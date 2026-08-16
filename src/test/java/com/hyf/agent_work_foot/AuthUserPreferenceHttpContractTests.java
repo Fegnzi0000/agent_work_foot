@@ -104,7 +104,7 @@ class AuthUserPreferenceHttpContractTests extends AbstractMySqlIntegrationTest {
         Map<String, Object> onboarding = Map.of(
                 "nickname", "小饭",
                 "budgetEnabled", true,
-                "dailyBudget", 30,
+                "dailyBudget", "30",
                 "medicalAllergies", List.of(Map.of("type", "PRESET", "value", "ALLERGY_EGG")),
                 "dietaryRestrictions", List.of(),
                 "dislikes", List.of(),
@@ -114,12 +114,15 @@ class AuthUserPreferenceHttpContractTests extends AbstractMySqlIntegrationTest {
                 onboarding, accessToken).getResponse().getStatus());
         JsonNode preferences = json(perform(MockMvcRequestBuilders.get("/api/v1/users/me/preferences"),
                 null, accessToken));
-        assertEquals(30, preferences.path("data").path("dailyBudget").asInt());
+        assertEquals("30.00", preferences.path("data").path("dailyBudget").asText());
         assertEquals("ALLERGY_EGG", preferences.path("data").path("medicalAllergies").get(0)
                 .path("value").asText());
 
         assertEquals(400, perform(MockMvcRequestBuilders.patch("/api/v1/users/me/preferences"), Map.of(
                 "budgetEnabled", false,
+                "dailyBudget", "20"
+        ), accessToken).getResponse().getStatus());
+        assertEquals(400, perform(MockMvcRequestBuilders.patch("/api/v1/users/me/preferences"), Map.of(
                 "dailyBudget", 20
         ), accessToken).getResponse().getStatus());
         assertEquals(200, perform(MockMvcRequestBuilders.patch("/api/v1/users/me/preferences"),

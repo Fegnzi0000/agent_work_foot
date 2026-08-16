@@ -4,16 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.hyf.agent_work_foot.common.ApiException;
+import com.hyf.agent_work_foot.common.MoneyParser;
 import com.hyf.agent_work_foot.food.BasicFoodContentValidator;
 import com.hyf.agent_work_foot.food.FoodNormalizer;
-import com.hyf.agent_work_foot.food.FoodPriceParser;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** 食物规范化、内容和金额规则的纯单元测试，不启动 Spring 或 Docker。 */
 class FoodValidationTests {
     private final FoodNormalizer normalizer = new FoodNormalizer();
-    private final FoodPriceParser priceParser = new FoodPriceParser();
+    private final MoneyParser priceParser = new MoneyParser();
     private final BasicFoodContentValidator validator = new BasicFoodContentValidator();
 
     /** 作用：验证名称、分类和 LIKE 规范化。输入：带空白、大小写和通配符文本。输出：预期规范值。逻辑：覆盖唯一键与查询口径。 */

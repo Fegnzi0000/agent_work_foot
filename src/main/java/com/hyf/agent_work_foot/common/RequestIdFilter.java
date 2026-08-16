@@ -6,6 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -19,6 +21,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestIdFilter extends OncePerRequestFilter {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RequestIdFilter.class);
+
     /**
      * 作用：建立并清理单个请求的 requestId 上下文。
      *
@@ -32,11 +36,17 @@ public class RequestIdFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
         String requestId = UUID.randomUUID().toString();
+        long startedAt = System.nanoTime();
         RequestIdContext.set(requestId);
         response.setHeader("X-Request-Id", requestId);
+        LOGGER.info("[请求] 开始处理 requestId={} method={} uri={}",
+                requestId, request.getMethod(), request.getRequestURI());
         try {
             filterChain.doFilter(request, response);
         } finally {
+            long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000;
+            LOGGER.info("[请求] 处理完成 requestId={} status={} durationMs={}",
+                    requestId, response.getStatus(), elapsedMillis);
             RequestIdContext.clear();
         }
     }
