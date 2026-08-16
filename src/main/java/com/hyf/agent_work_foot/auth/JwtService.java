@@ -10,6 +10,7 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.SignedJWT;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -34,6 +35,7 @@ public class JwtService {
     private final AuthProperties.Jwt properties;
     private final JwtEncoder encoder;
     private final Map<String, SecretKey> verificationKeys;
+    private final Clock clock;
 
     /**
      * 作用：根据外部配置初始化 JWT 编码器和密钥环。
@@ -41,8 +43,9 @@ public class JwtService {
      * <p>输入：认证配置中的 JWT 子配置。输出：可签发活动 Token、验证两把密钥 Token 的服务实例。
      * 逻辑：活动密钥同时配置编码和解码器，上一把密钥只加入解码器。</p>
      */
-    public JwtService(AuthProperties properties) {
+    public JwtService(AuthProperties properties, Clock clock) {
         this.properties = properties.jwt();
+        this.clock = clock;
         SecretKey activeKey = key(this.properties.activeSecret());
         OctetSequenceKey activeJwk = new OctetSequenceKey.Builder(activeKey)
                 .keyID(this.properties.activeKeyId())
@@ -61,15 +64,16 @@ public class JwtService {
     /**
      * 作用：使用活动密钥签发 Access Token。
      *
-     * <p>输入：已认证用户 ID 与角色。输出：带 kid、过期时间和访问类型声明的 JWT 字符串。
-     * 逻辑：写入 issuer、subject、role、type、签发时间与过期时间，不签发 Refresh Token。</p>
+     * <p>输入：已认证用户 ID、角色与账号安全版本。输出：带 kid、过期时间和访问类型声明的 JWT 字符串。
+     * 逻辑：写入 issuer、subject、role、ver、type、签发时间与过期时间，不签发 Refresh Token。</p>
      */
-    public String issueAccessToken(String userId, String role) {
-        Instant now = Instant.now();
+    public String issueAccessToken(String userId, String role, int authVersion) {
+        Instant now = clock.instant();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(properties.issuer())
                 .subject(userId)
                 .claim("role", role)
+                .claim("ver", authVersion)
                 .claim("type", "access")
                 .issuedAt(now)
                 .expiresAt(now.plus(properties.accessTokenTtl()))
@@ -98,14 +102,16 @@ public class JwtService {
             if (!properties.issuer().equals(claims.getIssuer())
                     || !"access".equals(claims.getStringClaim("type"))
                     || claims.getExpirationTime() == null
-                    || !claims.getExpirationTime().toInstant().isAfter(Instant.now())) {
+                    || !claims.getExpirationTime().toInstant().isAfter(clock.instant())) {
                 throw unauthorized();
             }
             String role = claims.getStringClaim("role");
-            if (claims.getSubject() == null || role == null) {
+            Long authVersion = claims.getLongClaim("ver");
+            if (claims.getSubject() == null || role == null || authVersion == null
+                    || authVersion < 0 || authVersion > Integer.MAX_VALUE) {
                 throw unauthorized();
             }
-            return new AccessToken(claims.getSubject(), role);
+            return new AccessToken(claims.getSubject(), role, authVersion.intValue());
         } catch (ApiException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -132,6 +138,6 @@ public class JwtService {
     }
 
     /** 已验证 Access Token 的最小认证信息，供安全 Filter 写入 Security Context。 */
-    public record AccessToken(String userId, String role) {
+    public record AccessToken(String userId, String role, int authVersion) {
     }
 }

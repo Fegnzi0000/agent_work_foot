@@ -19,6 +19,9 @@ public interface FoodOptionMapper extends BaseMapper<FoodOptionEntity> {
     /** 作用：读取用户有效食物详情。输入：用户ID、食物ID。输出：实体或空。逻辑：同时校验归属和软删除。 */
     FoodOptionEntity selectOwnedActive(@Param("userId") String userId, @Param("foodId") String foodId);
 
+    /** 作用：读取用户全部有效食物。输入：用户ID。输出：按ID稳定排序的实体列表。逻辑：供Slot批量构造完整候选池。 */
+    List<FoodOptionEntity> selectAllOwnedActive(@Param("userId") String userId);
+
     /** 作用：锁定用户有效食物。输入：用户ID、食物ID。输出：实体或空。逻辑：使用FOR UPDATE保护PATCH。 */
     FoodOptionEntity selectOwnedActiveForUpdate(@Param("userId") String userId, @Param("foodId") String foodId);
 

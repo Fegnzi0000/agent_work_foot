@@ -22,6 +22,9 @@ public interface DietRecordMapper extends BaseMapper<DietRecordEntity> {
 
     DietRecordEntity selectOwnedActiveForUpdate(@Param("userId") String userId, @Param("recordId") String recordId);
 
+    /** 作用：读取用户记录且包含软删除状态。输入：用户和记录ID。输出：实体或空。逻辑：Slot幂等确认不得因软删除重建记录。 */
+    DietRecordEntity selectOwnedAny(@Param("userId") String userId, @Param("recordId") String recordId);
+
     int updateOwnedActive(@Param("userId") String userId, @Param("record") DietRecordEntity record);
 
     int softDelete(@Param("userId") String userId, @Param("recordId") String recordId,

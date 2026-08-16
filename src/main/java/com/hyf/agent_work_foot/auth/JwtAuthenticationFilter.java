@@ -1,5 +1,6 @@
 package com.hyf.agent_work_foot.auth;
 
+import com.hyf.agent_work_foot.common.AppConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,11 +20,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final RolePermissionResolver permissionResolver;
+    private final AccountSecurityService accountSecurityService;
 
     /** 作用：注入 JWT 服务。输入：Token 签发与校验服务。输出：Filter 实例。逻辑：保存依赖。 */
-    public JwtAuthenticationFilter(JwtService jwtService, RolePermissionResolver permissionResolver) {
+    public JwtAuthenticationFilter(JwtService jwtService, RolePermissionResolver permissionResolver,
+                                   AccountSecurityService accountSecurityService) {
         this.jwtService = jwtService;
         this.permissionResolver = permissionResolver;
+        this.accountSecurityService = accountSecurityService;
     }
 
     /**
@@ -42,10 +46,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authorization != null && authorization.startsWith("Bearer ")) {
             try {
                 JwtService.AccessToken token = jwtService.verifyAccessToken(authorization.substring(7));
+                var state = accountSecurityService.accessState(token.userId());
+                if (state == null || !AppConstants.USER_STATUS_ACTIVE.equals(state.status())
+                        || state.authVersion() != token.authVersion()) {
+                    throw new IllegalStateException("Access Token账号状态已失效");
+                }
                 var authentication = new UsernamePasswordAuthenticationToken(
                         token.userId(),
                         null,
-                        permissionResolver.resolve(token.role())
+                        permissionResolver.resolve(state.role(), state.mustChangePassword())
                 );
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (RuntimeException ignored) {

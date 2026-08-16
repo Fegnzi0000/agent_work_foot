@@ -21,7 +21,7 @@ public interface UserMapper {
     /**
      * 作用：修改指定用户的账号状态。
      * 输入：用户 ID 与受支持的状态常量。输出：影响行数。
-     * 逻辑：为账号安全和后续管理员模块提供真实业务数据入口，测试无需直接执行 SQL。
+     * 逻辑：同时递增安全版本，使禁用或重新启用前签发的Access Token永久失效。
      */
     int updateStatus(@Param("userId") String userId, @Param("status") String status);
 }

@@ -2,6 +2,10 @@ package com.hyf.agent_work_foot.common;
 
 /** 接口级权限常量，供安全解析器与方法注解共同使用。 */
 public final class AppPermissions {
+    public static final String ACCOUNT_SELF_VIEW = "ACCOUNT_SELF_VIEW";
+    public static final String ACCOUNT_CHANGE_PASSWORD = "ACCOUNT_CHANGE_PASSWORD";
+    public static final String ACCOUNT_CANCEL = "ACCOUNT_CANCEL";
+    public static final String PASSWORD_CHANGE_REQUIRED_STATE = "PASSWORD_CHANGE_REQUIRED_STATE";
     public static final String FOOD_LIST = "FOOD_LIST";
     public static final String FOOD_VIEW = "FOOD_VIEW";
     public static final String FOOD_CREATE = "FOOD_CREATE";
@@ -12,6 +16,8 @@ public final class AppPermissions {
     public static final String DIET_UPDATE = "DIET_UPDATE";
     public static final String DIET_DELETE = "DIET_DELETE";
     public static final String DIET_STATISTICS = "DIET_STATISTICS";
+    public static final String SLOT_SPIN = "SLOT_SPIN";
+    public static final String SLOT_CONFIRM = "SLOT_CONFIRM";
 
     /** 作用：禁止实例化。输入：无。输出：无。逻辑：权限只通过静态常量访问。 */
     private AppPermissions() {

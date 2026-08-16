@@ -4,21 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.hyf.agent_work_foot.auth.JwtService;
-import com.hyf.agent_work_foot.common.AppConstants;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /** Diet 五个接口的核心 HTTP 契约测试，覆盖手工快照、食物池关联、统计、权限与软删除。 */
 class DietHttpContractTests extends AbstractMySqlIntegrationTest {
-    @Autowired
-    private JwtService jwtService;
-
     /** 作用：验证手工记录入池、快照返回、修改、统计和删除。输入：真实USER令牌。输出：完整生命周期状态码。逻辑：通过公开HTTP接口验证事务链路。 */
     @Test
     void supportsManualRecordLifecycleAndStatistics() throws Exception {
@@ -70,7 +63,7 @@ class DietHttpContractTests extends AbstractMySqlIntegrationTest {
         assertEquals(400, incomplete.getResponse().getStatus());
         assertEquals("VALIDATION_FAILED", json(incomplete).path("code").asText());
         assertEquals(400, perform(MockMvcRequestBuilders.get("/api/v1/diet-records").param("startDate", "2026-08-01"), null, token).getResponse().getStatus());
-        String admin = jwtService.issueAccessToken(UUID.randomUUID().toString(), AppConstants.ROLE_ADMIN);
+        String admin = adminToken();
         assertEquals(403, perform(MockMvcRequestBuilders.get("/api/v1/diet-records"), null, admin).getResponse().getStatus());
     }
 }

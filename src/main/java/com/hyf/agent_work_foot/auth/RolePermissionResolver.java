@@ -17,13 +17,20 @@ import org.springframework.stereotype.Component;
 public class RolePermissionResolver {
     /**
      * 作用：将JWT角色转换为Security authority。
-     * 输入：已验证角色。输出：角色authority与接口权限列表。
-     * 逻辑：始终保留ROLE_*，仅USER追加food权限。
+     * 输入：数据库当前角色和强制改密状态。输出：角色authority与接口权限列表。
+     * 逻辑：强制改密时仅授予身份读取和改密能力；正常USER追加全部普通业务权限。
      */
-    public List<GrantedAuthority> resolve(String role) {
+    public List<GrantedAuthority> resolve(String role, boolean mustChangePassword) {
         List<GrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+        authorities.add(new SimpleGrantedAuthority(AppPermissions.ACCOUNT_SELF_VIEW));
+        authorities.add(new SimpleGrantedAuthority(AppPermissions.ACCOUNT_CHANGE_PASSWORD));
+        if (mustChangePassword) {
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.PASSWORD_CHANGE_REQUIRED_STATE));
+            return List.copyOf(authorities);
+        }
         if (AppConstants.ROLE_USER.equals(role)) {
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.ACCOUNT_CANCEL));
             authorities.add(new SimpleGrantedAuthority(AppPermissions.FOOD_LIST));
             authorities.add(new SimpleGrantedAuthority(AppPermissions.FOOD_VIEW));
             authorities.add(new SimpleGrantedAuthority(AppPermissions.FOOD_CREATE));
@@ -34,6 +41,8 @@ public class RolePermissionResolver {
             authorities.add(new SimpleGrantedAuthority(AppPermissions.DIET_UPDATE));
             authorities.add(new SimpleGrantedAuthority(AppPermissions.DIET_DELETE));
             authorities.add(new SimpleGrantedAuthority(AppPermissions.DIET_STATISTICS));
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.SLOT_SPIN));
+            authorities.add(new SimpleGrantedAuthority(AppPermissions.SLOT_CONFIRM));
         }
         return List.copyOf(authorities);
     }

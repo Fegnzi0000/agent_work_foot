@@ -58,6 +58,11 @@
         FOR UPDATE
     </select>
 
+    <!-- 作用：读取含软删除状态的归属记录；输入：用户和记录ID；输出：实体或空；逻辑：仅供跨模块幂等状态核对。 -->
+    <select id="selectOwnedAny" resultMap="DietRecordEntityMap">
+        SELECT * FROM diet_records WHERE id = #{recordId} AND user_id = #{userId}
+    </select>
+
     <!-- 作用：更新锁定后的饮食快照和业务字段；输入：用户和实体；输出：影响行数；逻辑：再次限制归属与未删除状态。 -->
     <update id="updateOwnedActive">
         UPDATE diet_records

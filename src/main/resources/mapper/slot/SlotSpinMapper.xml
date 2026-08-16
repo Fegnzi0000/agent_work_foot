@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- slot_spins复杂状态访问；所有变量使用#{...}预编译绑定，禁止动态字符串SQL。 -->
+<mapper namespace="com.hyf.agent_work_foot.slot.mapper.SlotSpinMapper">
+    <resultMap id="SlotSpinEntityMap" type="com.hyf.agent_work_foot.slot.entity.SlotSpinEntity">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="selectedFoodOptionId" column="selected_food_option_id"/>
+        <result property="selectedNameSnapshot" column="selected_name_snapshot"/>
+        <result property="selectedCategorySnapshot" column="selected_category_snapshot"/>
+        <result property="selectedPriceSnapshot" column="selected_price_snapshot"/>
+        <result property="selectedTagsSnapshotJson" column="selected_tags_snapshot_json" typeHandler="com.hyf.agent_work_foot.food.mapper.JsonStringListTypeHandler"/>
+        <result property="status" column="status"/>
+        <result property="confirmedDietRecordId" column="confirmed_diet_record_id"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="confirmedAt" column="confirmed_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- 作用：按归属锁定Spin；输入：用户与ID；输出：实体或空；逻辑：FOR UPDATE保护状态机与幂等确认。 -->
+    <select id="selectOwnedForUpdate" resultMap="SlotSpinEntityMap">
+        SELECT * FROM slot_spins WHERE id = #{spinId} AND user_id = #{userId} FOR UPDATE
+    </select>
+
+    <!-- 作用：条件标记过期；输入：归属、ID、时间；输出：影响行数；逻辑：不覆盖已确认状态。 -->
+    <update id="markExpired">
+        UPDATE slot_spins SET status = 'EXPIRED', updated_at = #{updatedAt}
+        WHERE id = #{spinId} AND user_id = #{userId} AND status = 'GENERATED'
+    </update>
+
+    <!-- 作用：条件确认Spin；输入：归属、ID、Diet ID与时间；输出：影响行数；逻辑：原子写入幂等关联。 -->
+    <update id="markConfirmed">
+        UPDATE slot_spins
+        SET status = 'CONFIRMED', confirmed_diet_record_id = #{dietRecordId},
+            confirmed_at = #{confirmedAt}, updated_at = #{confirmedAt}
+        WHERE id = #{spinId} AND user_id = #{userId} AND status = 'GENERATED'
+          AND confirmed_diet_record_id IS NULL
+    </update>
+</mapper>

@@ -15,6 +15,15 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 app:
+  account-security:
+    rate-limit:
+      max-attempts: 5
+      window: PT15M
+  slot:
+    spin-ttl: PT5M
+    rate-limit:
+      max-attempts: 60
+      window: PT1M
   auth:
     jwt:
       issuer: agent-work-foot

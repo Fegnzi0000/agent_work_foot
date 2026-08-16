@@ -5,21 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.hyf.agent_work_foot.auth.JwtService;
-import com.hyf.agent_work_foot.common.AppConstants;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /** Food 五个 HTTP 接口的状态码、权限、归属、PATCH 与 requestId 契约测试。 */
 class FoodHttpContractTests extends AbstractMySqlIntegrationTest {
-    @Autowired
-    private JwtService jwtService;
-
     /** 作用：验证创建、详情、修改、删除和重复删除。输入：真实 USER Token。输出：201/200/204/404。逻辑：同时验证六字段与空标签兜底。 */
     @Test
     void supportsCompleteFoodLifecycle() throws Exception {
@@ -132,7 +125,7 @@ class FoodHttpContractTests extends AbstractMySqlIntegrationTest {
         assertEquals(401, perform(MockMvcRequestBuilders.get("/api/v1/food-options"), null, null)
                 .getResponse().getStatus());
 
-        String adminToken = jwtService.issueAccessToken(UUID.randomUUID().toString(), AppConstants.ROLE_ADMIN);
+        String adminToken = adminToken();
         MvcResult forbidden = perform(MockMvcRequestBuilders.get("/api/v1/food-options"), null, adminToken);
         assertEquals(403, forbidden.getResponse().getStatus());
         assertEquals("FORBIDDEN", json(forbidden).path("code").asText());

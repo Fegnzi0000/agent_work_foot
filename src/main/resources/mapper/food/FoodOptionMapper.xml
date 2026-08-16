@@ -32,6 +32,13 @@
         SELECT * FROM food_options WHERE id = #{foodId} AND user_id = #{userId} AND deleted_at IS NULL
     </select>
 
+    <!-- 作用：批量读取当前用户完整有效食物池；输入：用户ID；输出：稳定排序实体；逻辑：标签由另一条批量查询组装。 -->
+    <select id="selectAllOwnedActive" resultType="com.hyf.agent_work_foot.food.entity.FoodOptionEntity">
+        SELECT * FROM food_options
+        WHERE user_id = #{userId} AND deleted_at IS NULL
+        ORDER BY id ASC
+    </select>
+
     <!-- 作用：锁定有效食物；输入：userId、foodId；输出：Entity或空；逻辑：FOR UPDATE串行化标签整体替换。 -->
     <select id="selectOwnedActiveForUpdate" resultType="com.hyf.agent_work_foot.food.entity.FoodOptionEntity">
         SELECT * FROM food_options WHERE id = #{foodId} AND user_id = #{userId} AND deleted_at IS NULL FOR UPDATE

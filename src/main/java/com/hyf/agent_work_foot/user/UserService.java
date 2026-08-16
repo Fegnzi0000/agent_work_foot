@@ -1,5 +1,6 @@
 package com.hyf.agent_work_foot.user;
 
+import com.hyf.agent_work_foot.auth.AccountSecurityService;
 import com.hyf.agent_work_foot.auth.mapper.AuthMapper.UserRow;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.preference.PreferenceRequests;
@@ -18,11 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
     private final UserMapper mapper;
     private final PreferenceService preferenceService;
+    private final AccountSecurityService accountSecurityService;
 
     /** 作用：注入用户数据访问和偏好业务服务。输入：UserMapper、PreferenceService。输出：服务实例。逻辑：保存依赖。 */
-    public UserService(UserMapper mapper, PreferenceService preferenceService) {
+    public UserService(UserMapper mapper, PreferenceService preferenceService,
+                       AccountSecurityService accountSecurityService) {
         this.mapper = mapper;
         this.preferenceService = preferenceService;
+        this.accountSecurityService = accountSecurityService;
     }
 
     /**
@@ -61,6 +65,25 @@ public class UserService {
         }
         mapper.completeOnboarding(id);
         return currentUser(id);
+    }
+
+    /**
+     * 作用：修改当前用户正式密码并退出全部会话。
+     * 输入：JWT用户ID和已完成格式校验的改密请求。输出：无。
+     * 逻辑：委托认证模块在单一事务内完成密码、安全版本和Token撤销，用户模块不接触密码哈希。
+     */
+    public void changePassword(String id, UserRequests.ChangePasswordRequest request) {
+        accountSecurityService.changePassword(id, request.currentPassword(), request.newPassword(),
+                request.confirmNewPassword());
+    }
+
+    /**
+     * 作用：软注销当前普通用户并退出全部会话。
+     * 输入：JWT用户ID和注销确认请求。输出：无。
+     * 逻辑：委托认证模块验证密码、更新账号状态和撤销Token，保留全部关联业务数据。
+     */
+    public void cancelAccount(String id, UserRequests.CancelAccountRequest request) {
+        accountSecurityService.cancelAccount(id, request.currentPassword(), request.confirmation());
     }
 
     /**

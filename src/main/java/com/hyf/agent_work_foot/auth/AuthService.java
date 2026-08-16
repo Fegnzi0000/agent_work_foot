@@ -8,7 +8,10 @@ import com.hyf.agent_work_foot.food.FoodInitializationService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
@@ -32,6 +35,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthProperties properties;
     private final FoodInitializationService foodInitializationService;
+    private final Clock clock;
 
     /**
      * 作用：注入认证流程依赖。
@@ -44,13 +48,15 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AuthProperties properties,
-            FoodInitializationService foodInitializationService
+            FoodInitializationService foodInitializationService,
+            Clock clock
     ) {
         this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.properties = properties;
         this.foodInitializationService = foodInitializationService;
+        this.clock = clock;
     }
 
     /**
@@ -77,7 +83,8 @@ public class AuthService {
                 AppConstants.ROLE_USER,
                 AppConstants.USER_STATUS_ACTIVE,
                 false,
-                false
+                false,
+                0
         );
         mapper.insertUser(user, passwordEncoder.encode(request.password()));
         foodInitializationService.initializeDefaults(user.id());
@@ -97,7 +104,7 @@ public class AuthService {
                 || !passwordEncoder.matches(request.password(), found.passwordHash())) {
             throw unauthorized();
         }
-        mapper.updateLastLogin(found.id());
+        mapper.updateLastLogin(found.id(), utcNow());
         AuthMapper.UserRow user = new AuthMapper.UserRow(
                 found.id(),
                 found.email(),
@@ -106,7 +113,8 @@ public class AuthService {
                 found.role(),
                 found.status(),
                 found.onboardingCompleted(),
-                found.mustChangePassword()
+                found.mustChangePassword(),
+                found.authVersion()
         );
         return authData(user, issueRefreshToken(user.id(), null));
     }
@@ -122,14 +130,16 @@ public class AuthService {
         AuthMapper.RefreshTokenRow token = mapper.selectRefreshToken(hash(rawToken));
         if (token == null
                 || token.revokedAt() != null
-                || !token.expiresAt().isAfter(Instant.now())
+                || !token.expiresAt().isAfter(clock.instant())
                 || !AppConstants.USER_STATUS_ACTIVE.equals(token.status())) {
-            throw unauthorized();
+            throw tokenInvalid();
         }
-        mapper.revokeById(token.id(), AppConstants.TOKEN_REVOKE_ROTATED);
+        if (mapper.revokeById(token.id(), AppConstants.TOKEN_REVOKE_ROTATED, utcNow()) != 1) {
+            throw tokenInvalid();
+        }
         RefreshTokenPair pair = issueRefreshToken(token.userId(), token.id());
         return new AuthResponses.TokenData(
-                jwtService.issueAccessToken(token.userId(), token.role()),
+                jwtService.issueAccessToken(token.userId(), token.role(), token.authVersion()),
                 properties.jwt().accessTokenTtl().toSeconds(),
                 pair.rawToken(),
                 properties.jwt().refreshTokenTtl().toSeconds()
@@ -143,8 +153,8 @@ public class AuthService {
      * 逻辑：仅按摘要撤销一条未撤销 Token，不撤销该用户其他会话。</p>
      */
     public void logout(String rawToken) {
-        if (mapper.revokeByHash(hash(rawToken), AppConstants.TOKEN_REVOKE_LOGOUT) == 0) {
-            throw unauthorized();
+        if (mapper.revokeByHash(hash(rawToken), AppConstants.TOKEN_REVOKE_LOGOUT, utcNow()) == 0) {
+            throw tokenInvalid();
         }
     }
 
@@ -156,7 +166,7 @@ public class AuthService {
      */
     private AuthResponses.AuthData authData(AuthMapper.UserRow user, RefreshTokenPair refreshToken) {
         return new AuthResponses.AuthData(
-                jwtService.issueAccessToken(user.id(), user.role()),
+                jwtService.issueAccessToken(user.id(), user.role(), user.authVersion()),
                 properties.jwt().accessTokenTtl().toSeconds(),
                 refreshToken.rawToken(),
                 properties.jwt().refreshTokenTtl().toSeconds(),
@@ -183,7 +193,7 @@ public class AuthService {
                 userId,
                 hash(raw),
                 parentId,
-                Instant.now().plus(properties.jwt().refreshTokenTtl())
+                clock.instant().plus(properties.jwt().refreshTokenTtl())
         ));
         return new RefreshTokenPair(raw);
     }
@@ -218,6 +228,16 @@ public class AuthService {
     /** 作用：创建统一登录凭据失败异常。输入：无。输出：AUTH_INVALID_CREDENTIALS 异常。逻辑：不暴露账号、密码或 Token 的具体失败原因。 */
     private ApiException unauthorized() {
         return new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS", "邮箱或密码错误");
+    }
+
+    /** 作用：创建统一Token失败异常。输入：无。输出：AUTH_TOKEN_INVALID异常。逻辑：刷新和退出不复用登录凭据错误。 */
+    private ApiException tokenInvalid() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_TOKEN_INVALID", "Token无效或已过期");
+    }
+
+    /** 作用：取得UTC数据库时间。输入：无。输出：UTC LocalDateTime。逻辑：认证时间统一来自可注入Clock。 */
+    private LocalDateTime utcNow() {
+        return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
 
     /** 仅在服务内部传递新生成的 Refresh Token 原文，避免将原文写入持久化对象。 */

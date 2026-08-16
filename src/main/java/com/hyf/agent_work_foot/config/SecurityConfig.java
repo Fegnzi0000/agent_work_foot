@@ -1,5 +1,6 @@
 package com.hyf.agent_work_foot.config;
 
+import com.hyf.agent_work_foot.auth.AccountRestrictionFilter;
 import com.hyf.agent_work_foot.auth.JwtAuthenticationFilter;
 import com.hyf.agent_work_foot.common.RestAccessDeniedHandler;
 import com.hyf.agent_work_foot.common.RestAuthenticationEntryPoint;
@@ -25,6 +26,7 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter,
+            AccountRestrictionFilter accountRestrictionFilter,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler
     ) throws Exception {
@@ -39,6 +41,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(accountRestrictionFilter, JwtAuthenticationFilter.class)
                 .build();
     }
 

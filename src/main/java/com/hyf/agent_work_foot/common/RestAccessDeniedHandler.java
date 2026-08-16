@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
@@ -22,11 +23,16 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
     /** 作用：输出403错误。输入：请求、响应与权限异常。输出：统一JSON。逻辑：不泄露具体权限映射。 */
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException exception) {
+        boolean passwordChangeRequired = SecurityContextHolder.getContext().getAuthentication() != null
+                && SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(authority -> AppPermissions.PASSWORD_CHANGE_REQUIRED_STATE.equals(authority.getAuthority()));
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         try {
-            objectMapper.writeValue(response.getOutputStream(), ErrorResponse.of("FORBIDDEN", "无权限执行该操作", List.of()));
+            String code = passwordChangeRequired ? "PASSWORD_CHANGE_REQUIRED" : "FORBIDDEN";
+            String message = passwordChangeRequired ? "请先修改密码" : "无权限执行该操作";
+            objectMapper.writeValue(response.getOutputStream(), ErrorResponse.of(code, message, List.of()));
         } catch (Exception ignored) {
             // 响应流不可写时保留403状态。
         }

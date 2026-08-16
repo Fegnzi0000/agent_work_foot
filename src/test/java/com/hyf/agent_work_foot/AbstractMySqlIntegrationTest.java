@@ -2,12 +2,16 @@ package com.hyf.agent_work_foot;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hyf.agent_work_foot.auth.JwtService;
+import com.hyf.agent_work_foot.auth.mapper.AuthMapper;
+import com.hyf.agent_work_foot.common.AppConstants;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -39,6 +43,15 @@ public abstract class AbstractMySqlIntegrationTest {
     @Autowired
     protected ObjectMapper objectMapper;
 
+    @Autowired
+    private AuthMapper authMapper;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtService jwtService;
+
     /**
      * 作用：将 Testcontainers 数据源接入 Spring。
      * 输入：动态配置注册器。输出：无。
@@ -68,6 +81,39 @@ public abstract class AbstractMySqlIntegrationTest {
     }
 
     /**
+     * 作用：创建数据库真实存在的管理员并签发受版本校验的Token。
+     * 输入：无。输出：ADMIN Access Token。
+     * 逻辑：账号状态Filter不再信任不存在用户的自签Token，因此测试通过认证Mapper建立最小管理员夹具。
+     */
+    protected String adminToken() {
+        return adminAccount().accessToken();
+    }
+
+    /**
+     * 作用：创建可用于管理员自助改密测试的完整账号夹具。
+     * 输入：无。输出：ID、邮箱、原密码和Access Token。
+     * 逻辑：仍通过生产AuthMapper和PasswordEncoder持久化，不绕过账号安全状态查询。
+     */
+    protected AdminAccount adminAccount() {
+        String id = UUID.randomUUID().toString();
+        String email = "admin+" + UUID.randomUUID() + "@example.com";
+        String password = "Pass_123";
+        authMapper.insertUser(new AuthMapper.UserRow(
+                id,
+                email,
+                "测试管理员",
+                null,
+                AppConstants.ROLE_ADMIN,
+                AppConstants.USER_STATUS_ACTIVE,
+                true,
+                false,
+                0
+        ), passwordEncoder.encode(password));
+        return new AdminAccount(id, email, password,
+                jwtService.issueAccessToken(id, AppConstants.ROLE_ADMIN, 0));
+    }
+
+    /**
      * 作用：执行带可选 JSON 请求体和 Bearer Token 的请求。
      * 输入：MockMvc 请求、可空请求体和可空 Token。输出：原始 MVC 结果。
      * 逻辑：统一序列化和认证 Header，断言由具体测试完成。
@@ -90,5 +136,9 @@ public abstract class AbstractMySqlIntegrationTest {
      */
     protected JsonNode json(MvcResult result) throws Exception {
         return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    /** 集成测试管理员夹具，只在测试进程内传递登录资料。 */
+    protected record AdminAccount(String id, String email, String password, String accessToken) {
     }
 }

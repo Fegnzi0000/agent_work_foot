@@ -18,7 +18,8 @@
                role,
                status,
                onboarding_completed AS onboardingCompleted,
-               must_change_password AS mustChangePassword
+               must_change_password AS mustChangePassword,
+               auth_version AS authVersion
         FROM users
         WHERE id = #{userId}
     </select>
@@ -52,7 +53,8 @@
     -->
     <update id="updateStatus">
         UPDATE users
-        SET status = #{status}
+        SET status = #{status},
+            auth_version = auth_version + 1
         WHERE id = #{userId}
     </update>
 </mapper>

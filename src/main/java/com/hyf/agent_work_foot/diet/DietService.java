@@ -86,6 +86,37 @@ public class DietService {
         return response(entity);
     }
 
+    /**
+     * 作用：根据已生成的Slot快照创建饮食记录。
+     * 输入：用户、Spin ID、不可变食物快照和确认表单。输出：最终Diet响应。
+     * 逻辑：复用金额、餐次、时间与业务日期规则，来源固定SLOT；外层Slot事务保证记录与确认状态原子提交。
+     */
+    @Transactional(noRollbackFor = ApiException.class)
+    public DietResponses.DietRecordData createFromSlot(String userId, String spinId, SlotFoodInput food,
+                                                       String actualPrice, String mealTypeInput,
+                                                       OffsetDateTime eatenAt) {
+        BigDecimal price = priceParser.parse(actualPrice, "actualPrice", "实际价格");
+        String validMealType = mealType(mealTypeInput);
+        TimeValue validTime = time(eatenAt);
+        DietRecordEntity entity = record(userId,
+                new ResolvedFood(food.foodOptionId(), food.name(), food.category(), List.copyOf(food.tags())),
+                price, validMealType, validTime);
+        entity.setSource("SLOT");
+        entity.setSourceReferenceId(spinId);
+        mapper.insert(entity);
+        return response(entity);
+    }
+
+    /**
+     * 作用：读取Slot已经关联的Diet记录并保留软删除信息。
+     * 输入：用户和记录ID。输出：不存在时null，否则返回响应及删除标记。
+     * 逻辑：只为Slot重复确认提供幂等结果，不作为公开历史查询入口。
+     */
+    public SlotRecordLookup findSlotRecord(String userId, String recordId) {
+        DietRecordEntity entity = mapper.selectOwnedAny(userId, recordId);
+        return entity == null ? null : new SlotRecordLookup(response(entity), entity.getDeletedAt() != null);
+    }
+
     /** 作用：分页查询当前用户历史快照。输入：筛选和0基分页。输出：标准分页响应。逻辑：默认当前自然月且不读取food表。 */
     public DietResponses.DietRecordPageData list(String userId, int page, int size, LocalDate startDate, LocalDate endDate,
                                                   String mealType, String category, String source) {
@@ -209,4 +240,10 @@ public class DietService {
     private record ResolvedFood(String foodOptionId, String name, String category, List<String> tags) { }
     private record TimeValue(LocalDateTime utc, LocalDate businessDate) { }
     private record DateRange(LocalDate start, LocalDate end) { }
+
+    /** Slot传入Diet的不可变食物快照。 */
+    public record SlotFoodInput(String foodOptionId, String name, String category, List<String> tags) { }
+
+    /** Slot重复确认读取结果，deleted表示关联记录已经软删除。 */
+    public record SlotRecordLookup(DietResponses.DietRecordData data, boolean deleted) { }
 }

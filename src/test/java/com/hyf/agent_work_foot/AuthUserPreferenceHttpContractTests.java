@@ -136,7 +136,10 @@ class AuthUserPreferenceHttpContractTests extends AbstractMySqlIntegrationTest {
         JsonNode registered = register("disabled-user");
         String userId = registered.path("data").path("user").path("id").asText();
         String email = registered.path("data").path("user").path("email").asText();
+        String accessToken = registered.path("data").path("accessToken").asText();
         assertEquals(1, userMapper.updateStatus(userId, "DISABLED"));
+        assertEquals(401, perform(MockMvcRequestBuilders.get("/api/v1/users/me"), null, accessToken)
+                .getResponse().getStatus());
         assertEquals(401, perform(MockMvcRequestBuilders.post("/api/v1/auth/login"), Map.of(
                 "email", email,
                 "password", "Pass_123"
