@@ -23,7 +23,7 @@ import org.testcontainers.mysql.MySQLContainer;
 /**
  * MySQL 集成测试公共基类。
  *
- * <p>统一启动 MySQL 8.4、执行 Flyway V1，并提供 MockMvc 注册和 JSON 工具；测试不依赖本机开发库。</p>
+ * <p>统一启动 MySQL 8.4、执行全部Flyway迁移，并提供 MockMvc 注册和 JSON 工具；测试不依赖本机开发库。</p>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -95,6 +95,16 @@ public abstract class AbstractMySqlIntegrationTest {
      * 逻辑：仍通过生产AuthMapper和PasswordEncoder持久化，不绕过账号安全状态查询。
      */
     protected AdminAccount adminAccount() {
+        return adminAccount(AppConstants.ROLE_ADMIN);
+    }
+
+    /** 作用：创建数据库真实存在的超级管理员。输入：无。输出：SUPER_ADMIN夹具。逻辑：用于验证管理员账号管理特权。 */
+    protected AdminAccount superAdminAccount() {
+        return adminAccount(AppConstants.ROLE_SUPER_ADMIN);
+    }
+
+    /** 作用：按系统角色创建管理员夹具。输入：ADMIN或SUPER_ADMIN。输出：完整登录资料。逻辑：统一生产Mapper建号和JWT版本。 */
+    private AdminAccount adminAccount(String role) {
         String id = UUID.randomUUID().toString();
         String email = "admin+" + UUID.randomUUID() + "@example.com";
         String password = "Pass_123";
@@ -103,14 +113,14 @@ public abstract class AbstractMySqlIntegrationTest {
                 email,
                 "测试管理员",
                 null,
-                AppConstants.ROLE_ADMIN,
+                role,
                 AppConstants.USER_STATUS_ACTIVE,
                 true,
                 false,
                 0
         ), passwordEncoder.encode(password));
         return new AdminAccount(id, email, password,
-                jwtService.issueAccessToken(id, AppConstants.ROLE_ADMIN, 0));
+                jwtService.issueAccessToken(id, role, 0));
     }
 
     /**

@@ -4,13 +4,14 @@
 <mapper namespace="com.hyf.agent_work_foot.auth.mapper.AccountSecurityMapper">
     <!-- 作用：读取JWT校验状态；输入：用户ID；输出：角色、状态、安全版本和强制改密标记。 -->
     <select id="selectAccessState" resultType="com.hyf.agent_work_foot.auth.mapper.AccountSecurityMapper$AccessState">
-        SELECT id,
-               role,
-               status,
-               auth_version AS authVersion,
-               must_change_password AS mustChangePassword
-        FROM users
-        WHERE id = #{userId}
+        SELECT u.id,
+               r.code AS role,
+               u.status,
+               u.auth_version AS authVersion,
+               u.must_change_password AS mustChangePassword
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        WHERE u.id = #{userId}
     </select>
 
     <!-- 作用：锁定改密或注销目标；输入：用户ID；输出：账号凭据状态。 -->

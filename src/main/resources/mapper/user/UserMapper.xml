@@ -11,17 +11,18 @@
       逻辑：只选择接口需要的资料和账号状态，不返回 password_hash。
     -->
     <select id="selectById" resultType="com.hyf.agent_work_foot.auth.mapper.AuthMapper$UserRow">
-        SELECT id,
-               email,
-               nickname,
-               avatar_object_key AS avatarObjectKey,
-               role,
-               status,
-               onboarding_completed AS onboardingCompleted,
-               must_change_password AS mustChangePassword,
-               auth_version AS authVersion
-        FROM users
-        WHERE id = #{userId}
+        SELECT u.id,
+               u.email,
+               u.nickname,
+               u.avatar_object_key AS avatarObjectKey,
+               r.code AS role,
+               u.status,
+               u.onboarding_completed AS onboardingCompleted,
+               u.must_change_password AS mustChangePassword,
+               u.auth_version AS authVersion
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        WHERE u.id = #{userId}
     </select>
 
     <!--

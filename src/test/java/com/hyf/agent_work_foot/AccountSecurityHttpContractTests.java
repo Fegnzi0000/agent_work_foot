@@ -111,16 +111,19 @@ class AccountSecurityHttpContractTests extends AbstractMySqlIntegrationTest {
 
     /**
      * 作用：验证强制改密白名单以及改密后的限制解除。
-     * 输入：数据库进入mustChangePassword状态的真实USER。输出：资料200、业务403、注销403和改密200。
-     * 逻辑：旧Token因版本递增失效，测试签发匹配新版本的受信Token模拟未来临时密码登录。
+     * 输入：管理员为真实USER生成的一次性临时密码。输出：资料200、业务403、注销403和改密200。
+     * 逻辑：通过完整Admin重置和临时登录流程进入mustChangePassword状态，不绕过生产凭据语义。
      */
     @Test
     void restrictsAccountUntilRequiredPasswordChange() throws Exception {
         JsonNode registered = register("required-change").path("data");
         String userId = registered.path("user").path("id").asText();
         String email = registered.path("user").path("email").asText();
-        assertEquals(1, accountSecurityMapper.requirePasswordChange(userId, 0));
-        JsonNode forcedLogin = json(login(email, "Pass_123")).path("data");
+        MvcResult created = perform(MockMvcRequestBuilders.post(
+                "/api/v1/admin/users/" + userId + "/temporary-password"), null, adminToken());
+        assertEquals(201, created.getResponse().getStatus());
+        String temporaryPassword = json(created).path("data").path("temporaryPassword").asText();
+        JsonNode forcedLogin = json(login(email, temporaryPassword)).path("data");
         assertEquals("CHANGE_PASSWORD", forcedLogin.path("nextStep").asText());
         String restrictedToken = forcedLogin.path("accessToken").asText();
         String refreshToken = forcedLogin.path("refreshToken").asText();
@@ -138,10 +141,10 @@ class AccountSecurityHttpContractTests extends AbstractMySqlIntegrationTest {
         assertEquals(403, food.getResponse().getStatus());
         assertEquals("PASSWORD_CHANGE_REQUIRED", json(food).path("code").asText());
         MvcResult cancel = perform(MockMvcRequestBuilders.post("/api/v1/users/me/cancel"),
-                Map.of("currentPassword", "Pass_123", "confirmation", "CANCEL"), restrictedToken);
+                Map.of("currentPassword", temporaryPassword, "confirmation", "CANCEL"), restrictedToken);
         assertEquals(403, cancel.getResponse().getStatus());
         assertEquals("PASSWORD_CHANGE_REQUIRED", json(cancel).path("code").asText());
-        assertEquals(200, changePassword(restrictedToken, "Pass_123", "NewPass_2", "NewPass_2")
+        assertEquals(200, changePassword(restrictedToken, temporaryPassword, "NewPass_2", "NewPass_2")
                 .getResponse().getStatus());
         assertEquals(401, perform(MockMvcRequestBuilders.get("/api/v1/users/me"), null, restrictedToken)
                 .getResponse().getStatus());

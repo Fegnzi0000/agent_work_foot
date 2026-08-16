@@ -3,6 +3,7 @@ package com.hyf.agent_work_foot.auth;
 import com.hyf.agent_work_foot.auth.mapper.AuthMapper;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.AppConstants;
+import com.hyf.agent_work_foot.common.AppPermissions;
 import com.hyf.agent_work_foot.config.AuthProperties;
 import com.hyf.agent_work_foot.food.FoodInitializationService;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +37,8 @@ public class AuthService {
     private final AuthProperties properties;
     private final FoodInitializationService foodInitializationService;
     private final Clock clock;
+    private final RolePermissionResolver permissionResolver;
+    private final TemporaryCredentialService temporaryCredentialService;
 
     /**
      * 作用：注入认证流程依赖。
@@ -49,7 +52,9 @@ public class AuthService {
             JwtService jwtService,
             AuthProperties properties,
             FoodInitializationService foodInitializationService,
-            Clock clock
+            Clock clock,
+            RolePermissionResolver permissionResolver,
+            TemporaryCredentialService temporaryCredentialService
     ) {
         this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
@@ -57,6 +62,8 @@ public class AuthService {
         this.properties = properties;
         this.foodInitializationService = foodInitializationService;
         this.clock = clock;
+        this.permissionResolver = permissionResolver;
+        this.temporaryCredentialService = temporaryCredentialService;
     }
 
     /**
@@ -97,11 +104,14 @@ public class AuthService {
      * <p>输入：校验过格式的登录请求。输出：认证数据；账号不存在、禁用或密码不匹配时返回统一失败。
      * 逻辑：按标准化邮箱读取用户，校验启用状态和 BCrypt 哈希，更新登录时间并签发 Token 对。</p>
      */
+    @Transactional
     public AuthResponses.AuthData login(AuthRequests.LoginRequest request) {
         AuthMapper.UserWithPassword found = mapper.selectUserByEmail(normalizeEmail(request.email()));
         if (found == null
                 || !AppConstants.USER_STATUS_ACTIVE.equals(found.status())
-                || !passwordEncoder.matches(request.password(), found.passwordHash())) {
+                || !temporaryCredentialService.authenticate(
+                        found.id(), found.passwordHash(), found.mustChangePassword(), request.password()
+                )) {
             throw unauthorized();
         }
         mapper.updateLastLogin(found.id(), utcNow());
@@ -203,7 +213,7 @@ public class AuthService {
         if (user.mustChangePassword()) {
             return "CHANGE_PASSWORD";
         }
-        if (AppConstants.ROLE_ADMIN.equals(user.role())) {
+        if (permissionResolver.hasPermission(user.id(), AppPermissions.ADMIN_PORTAL_ACCESS)) {
             return "ADMIN_HOME";
         }
         return user.onboardingCompleted() ? "HOME" : "ONBOARDING";

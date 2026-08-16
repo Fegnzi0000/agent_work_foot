@@ -1,0 +1,101 @@
+-- 数据库驱动RBAC：一期每个用户关联一个角色，角色通过映射表获得接口权限。
+CREATE TABLE roles (
+    id CHAR(36) NOT NULL,
+    code VARCHAR(32) NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    is_system TINYINT(1) NOT NULL DEFAULT 1,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_roles_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE permissions (
+    id CHAR(36) NOT NULL,
+    code VARCHAR(64) NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    description VARCHAR(255) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_permissions_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE role_permissions (
+    role_id CHAR(36) NOT NULL,
+    permission_id CHAR(36) NOT NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (role_id, permission_id),
+    KEY idx_role_permissions_permission_id (permission_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO roles (id, code, name) VALUES
+    ('00000000-0000-0000-0000-000000000101', 'USER', '普通用户'),
+    ('00000000-0000-0000-0000-000000000102', 'ADMIN', '管理员'),
+    ('00000000-0000-0000-0000-000000000103', 'SUPER_ADMIN', '超级管理员');
+
+INSERT INTO permissions (id, code, name, description) VALUES
+    ('00000000-0000-0000-0000-000000000201', 'ACCOUNT_SELF_VIEW', '读取本人资料', '读取当前认证账号的公开资料'),
+    ('00000000-0000-0000-0000-000000000202', 'ACCOUNT_CHANGE_PASSWORD', '修改本人密码', '修改正式或临时密码'),
+    ('00000000-0000-0000-0000-000000000203', 'ACCOUNT_CANCEL', '注销本人账号', '将普通用户账号软注销'),
+    ('00000000-0000-0000-0000-000000000204', 'FOOD_LIST', '食物列表', '分页筛选本人食物池'),
+    ('00000000-0000-0000-0000-000000000205', 'FOOD_VIEW', '食物详情', '读取本人食物详情'),
+    ('00000000-0000-0000-0000-000000000206', 'FOOD_CREATE', '创建食物', '向本人食物池新增食物'),
+    ('00000000-0000-0000-0000-000000000207', 'FOOD_UPDATE', '修改食物', '修改本人食物池'),
+    ('00000000-0000-0000-0000-000000000208', 'FOOD_DELETE', '删除食物', '软删除本人食物'),
+    ('00000000-0000-0000-0000-000000000209', 'DIET_LIST', '饮食列表', '查询本人饮食记录'),
+    ('00000000-0000-0000-0000-000000000210', 'DIET_CREATE', '创建饮食记录', '创建本人饮食记录'),
+    ('00000000-0000-0000-0000-000000000211', 'DIET_UPDATE', '修改饮食记录', '修改本人饮食记录'),
+    ('00000000-0000-0000-0000-000000000212', 'DIET_DELETE', '删除饮食记录', '软删除本人饮食记录'),
+    ('00000000-0000-0000-0000-000000000213', 'DIET_STATISTICS', '饮食统计', '统计本人消费记录'),
+    ('00000000-0000-0000-0000-000000000214', 'SLOT_SPIN', '老虎机抽取', '生成本人随机食物结果'),
+    ('00000000-0000-0000-0000-000000000215', 'SLOT_CONFIRM', '老虎机确认', '确认老虎机结果并记录饮食'),
+    ('00000000-0000-0000-0000-000000000216', 'ADMIN_PORTAL_ACCESS', '管理员入口', '进入独立管理员界面'),
+    ('00000000-0000-0000-0000-000000000217', 'ADMIN_USER_LIST', '管理员用户查询', '查询可管理账号'),
+    ('00000000-0000-0000-0000-000000000218', 'ADMIN_USER_STATUS_UPDATE', '管理员状态修改', '启用或禁用账号'),
+    ('00000000-0000-0000-0000-000000000219', 'ADMIN_TEMP_PASSWORD_CREATE', '管理员临时密码', '生成一次性临时密码'),
+    ('00000000-0000-0000-0000-000000000220', 'ADMIN_ACCOUNT_MANAGE', '管理员账号管理', '查看和管理其他管理员账号');
+
+-- USER：本人账号与普通业务权限。
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT '00000000-0000-0000-0000-000000000101', id
+FROM permissions
+WHERE code IN (
+    'ACCOUNT_SELF_VIEW', 'ACCOUNT_CHANGE_PASSWORD', 'ACCOUNT_CANCEL',
+    'FOOD_LIST', 'FOOD_VIEW', 'FOOD_CREATE', 'FOOD_UPDATE', 'FOOD_DELETE',
+    'DIET_LIST', 'DIET_CREATE', 'DIET_UPDATE', 'DIET_DELETE', 'DIET_STATISTICS',
+    'SLOT_SPIN', 'SLOT_CONFIRM'
+);
+
+-- ADMIN：独立后台，只管理普通用户。
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT '00000000-0000-0000-0000-000000000102', id
+FROM permissions
+WHERE code IN (
+    'ACCOUNT_SELF_VIEW', 'ACCOUNT_CHANGE_PASSWORD', 'ADMIN_PORTAL_ACCESS',
+    'ADMIN_USER_LIST', 'ADMIN_USER_STATUS_UPDATE', 'ADMIN_TEMP_PASSWORD_CREATE'
+);
+
+-- SUPER_ADMIN：在ADMIN基础上允许管理其他管理员。
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT '00000000-0000-0000-0000-000000000103', id
+FROM permissions
+WHERE code IN (
+    'ACCOUNT_SELF_VIEW', 'ACCOUNT_CHANGE_PASSWORD', 'ADMIN_PORTAL_ACCESS',
+    'ADMIN_USER_LIST', 'ADMIN_USER_STATUS_UPDATE', 'ADMIN_TEMP_PASSWORD_CREATE',
+    'ADMIN_ACCOUNT_MANAGE'
+);
+
+ALTER TABLE users
+    ADD COLUMN role_id CHAR(36) NULL AFTER avatar_object_key;
+
+UPDATE users
+SET role_id = CASE role
+    WHEN 'ADMIN' THEN '00000000-0000-0000-0000-000000000102'
+    ELSE '00000000-0000-0000-0000-000000000101'
+END;
+
+ALTER TABLE users
+    MODIFY COLUMN role_id CHAR(36) NOT NULL,
+    ADD KEY idx_users_role_id (role_id),
+    DROP COLUMN role;

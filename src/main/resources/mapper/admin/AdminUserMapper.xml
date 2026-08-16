@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- Admin用户查询和高风险条件更新；所有变量使用#{...}预编译绑定。 -->
+<mapper namespace="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper">
+    <!-- 作用：分页查询账号；输入：邮箱前缀、状态、管理员可见性；输出：最小用户投影。 -->
+    <select id="selectAdminUserPage" resultType="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper$AdminUserRow">
+        SELECT u.id,
+               u.email,
+               u.nickname,
+               r.code AS role,
+               u.status,
+               u.onboarding_completed AS onboardingCompleted,
+               u.must_change_password AS mustChangePassword,
+               u.created_at AS createdAt,
+               u.last_login_at AS lastLoginAt
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        WHERE (#{includeAdmins} = 1 OR r.code = 'USER')
+        <if test="emailPrefix != null and emailPrefix != ''">
+            AND u.email LIKE CONCAT(#{emailPrefix}, '%') ESCAPE '\\'
+        </if>
+        <if test="status != null and status != ''">
+            AND u.status = #{status}
+        </if>
+        ORDER BY u.created_at DESC, u.id DESC
+    </select>
+
+    <!-- 作用：回读单个账号公开资料；输入：userId；输出：管理员响应投影。 -->
+    <select id="selectById" resultType="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper$AdminUserRow">
+        SELECT u.id,
+               u.email,
+               u.nickname,
+               r.code AS role,
+               u.status,
+               u.onboarding_completed AS onboardingCompleted,
+               u.must_change_password AS mustChangePassword,
+               u.created_at AS createdAt,
+               u.last_login_at AS lastLoginAt
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        WHERE u.id = #{userId}
+    </select>
+
+    <!-- 作用：按ID锁定账号；输入：userId；输出：角色、状态和安全版本。 -->
+    <select id="selectForUpdate" resultType="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper$LockedAdminUser">
+        SELECT u.id,
+               u.email,
+               r.code AS role,
+               u.status,
+               u.auth_version AS authVersion,
+               u.must_change_password AS mustChangePassword
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        WHERE u.id = #{userId}
+        FOR UPDATE
+    </select>
+
+    <!-- 作用：按邮箱锁定bootstrap目标；输入：email；输出：角色、状态和安全版本。 -->
+    <select id="selectByEmailForUpdate" resultType="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper$LockedAdminUser">
+        SELECT u.id,
+               u.email,
+               r.code AS role,
+               u.status,
+               u.auth_version AS authVersion,
+               u.must_change_password AS mustChangePassword
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        WHERE u.email = #{email}
+        FOR UPDATE
+    </select>
+
+    <!-- 作用：真实状态转换并使旧JWT失效；输入：用户、状态、版本；输出：影响行数。 -->
+    <update id="updateStatus">
+        UPDATE users
+        SET status = #{status},
+            auth_version = auth_version + 1
+        WHERE id = #{userId}
+          AND auth_version = #{expectedVersion}
+          AND status IN ('ACTIVE', 'DISABLED')
+    </update>
+
+    <!-- 作用：替换为临时密码并进入强制改密；输入：用户、哈希、版本；输出：影响行数。 -->
+    <update id="resetPassword">
+        UPDATE users
+        SET password_hash = #{passwordHash},
+            must_change_password = 1,
+            auth_version = auth_version + 1
+        WHERE id = #{userId}
+          AND auth_version = #{expectedVersion}
+          AND status = 'ACTIVE'
+    </update>
+
+    <!-- 作用：受控提升角色并使旧JWT失效；输入：用户、角色、版本；输出：影响行数。 -->
+    <update id="updateRole">
+        UPDATE users
+        SET role_id = #{roleId},
+            auth_version = auth_version + 1
+        WHERE id = #{userId}
+          AND auth_version = #{expectedVersion}
+          AND status = 'ACTIVE'
+    </update>
+</mapper>

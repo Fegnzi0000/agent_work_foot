@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 管理员审计写入；所有变量使用#{...}预编译绑定，detailJson只允许非敏感摘要。 -->
+<mapper namespace="com.hyf.agent_work_foot.admin.mapper.AdminAuditMapper">
+    <!-- 作用：写入审计事件；输入：audit；输出：影响一行。 -->
+    <insert id="insertAudit">
+        INSERT INTO admin_audit_logs (
+            id, admin_user_id, target_user_id, action, result, request_id, detail_json, created_at
+        ) VALUES (
+            #{audit.id}, #{audit.adminUserId}, #{audit.targetUserId}, #{audit.action}, #{audit.result},
+            #{audit.requestId}, CAST(#{audit.detailJson} AS JSON), #{audit.createdAt}
+        )
+    </insert>
+
+    <!-- 作用：核验目标动作审计；输入：targetUserId、action；输出：数量。 -->
+    <select id="countByTargetAndAction" resultType="long">
+        SELECT COUNT(*)
+        FROM admin_audit_logs
+        WHERE target_user_id = #{targetUserId}
+          AND action = #{action}
+    </select>
+</mapper>

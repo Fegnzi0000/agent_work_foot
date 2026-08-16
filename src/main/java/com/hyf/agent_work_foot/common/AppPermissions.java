@@ -1,6 +1,6 @@
 package com.hyf.agent_work_foot.common;
 
-/** 接口级权限常量，供安全解析器与方法注解共同使用。 */
+/** 稳定接口权限编码，角色与权限的实际分配由数据库role_permissions维护。 */
 public final class AppPermissions {
     public static final String ACCOUNT_SELF_VIEW = "ACCOUNT_SELF_VIEW";
     public static final String ACCOUNT_CHANGE_PASSWORD = "ACCOUNT_CHANGE_PASSWORD";
@@ -18,6 +18,11 @@ public final class AppPermissions {
     public static final String DIET_STATISTICS = "DIET_STATISTICS";
     public static final String SLOT_SPIN = "SLOT_SPIN";
     public static final String SLOT_CONFIRM = "SLOT_CONFIRM";
+    public static final String ADMIN_PORTAL_ACCESS = "ADMIN_PORTAL_ACCESS";
+    public static final String ADMIN_USER_LIST = "ADMIN_USER_LIST";
+    public static final String ADMIN_USER_STATUS_UPDATE = "ADMIN_USER_STATUS_UPDATE";
+    public static final String ADMIN_TEMP_PASSWORD_CREATE = "ADMIN_TEMP_PASSWORD_CREATE";
+    public static final String ADMIN_ACCOUNT_MANAGE = "ADMIN_ACCOUNT_MANAGE";
 
     /** 作用：禁止实例化。输入：无。输出：无。逻辑：权限只通过静态常量访问。 */
     private AppPermissions() {

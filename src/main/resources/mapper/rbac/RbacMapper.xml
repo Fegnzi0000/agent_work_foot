@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 动态RBAC查询；所有变量使用#{...}预编译绑定，禁止动态字符串SQL。 -->
+<mapper namespace="com.hyf.agent_work_foot.rbac.mapper.RbacMapper">
+    <!-- 作用：查询用户角色权限；输入：userId；输出：有效权限编码。 -->
+    <select id="selectPermissionCodesByUserId" resultType="string">
+        SELECT p.code
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        JOIN role_permissions rp ON rp.role_id = r.id
+        JOIN permissions p ON p.id = rp.permission_id
+        WHERE u.id = #{userId}
+        ORDER BY p.code ASC
+    </select>
+
+    <!-- 作用：解析有效角色；输入：code；输出：角色轻量投影。 -->
+    <select id="selectActiveRoleByCode" resultType="com.hyf.agent_work_foot.rbac.mapper.RbacMapper$RoleRow">
+        SELECT id, code, name
+        FROM roles
+        WHERE code = #{code}
+          AND is_active = 1
+    </select>
+
+    <!-- 作用：统计可用超级管理员；输入：无；输出：ACTIVE账号数量。 -->
+    <select id="countActiveSuperAdmins" resultType="long">
+        SELECT COUNT(*)
+        FROM users u
+        JOIN roles r ON r.id = u.role_id
+        WHERE r.code = 'SUPER_ADMIN'
+          AND u.status = 'ACTIVE'
+    </select>
+</mapper>

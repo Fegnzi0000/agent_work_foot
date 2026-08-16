@@ -8,6 +8,7 @@ package com.hyf.agent_work_foot.common;
 public final class AppConstants {
     public static final String ROLE_USER = "USER";
     public static final String ROLE_ADMIN = "ADMIN";
+    public static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     public static final String USER_STATUS_ACTIVE = "ACTIVE";
     public static final String USER_STATUS_DISABLED = "DISABLED";
     public static final String USER_STATUS_CANCELLED = "CANCELLED";
@@ -16,6 +17,8 @@ public final class AppConstants {
     public static final String TOKEN_REVOKE_PASSWORD_CHANGED = "PASSWORD_CHANGED";
     public static final String TOKEN_REVOKE_ACCOUNT_CANCELLED = "ACCOUNT_CANCELLED";
     public static final String TOKEN_REVOKE_ACCOUNT_DISABLED = "ACCOUNT_DISABLED";
+    public static final String TOKEN_REVOKE_ADMIN_PASSWORD_RESET = "ADMIN_PASSWORD_RESET";
+    public static final String TOKEN_REVOKE_ROLE_CHANGED = "ROLE_CHANGED";
     public static final String PREFERENCE_PRESET = "PRESET";
     public static final String PREFERENCE_CUSTOM = "CUSTOM";
 

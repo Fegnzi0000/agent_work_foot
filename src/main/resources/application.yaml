@@ -15,6 +15,17 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 app:
+  admin:
+    temporary-password-ttl: PT30M
+    rate-limit:
+      target-max-attempts: 5
+      target-window: PT15M
+      admin-max-attempts: 30
+      admin-window: PT1H
+    bootstrap:
+      enabled: false
+      email: ""
+      role: SUPER_ADMIN
   account-security:
     rate-limit:
       max-attempts: 5
