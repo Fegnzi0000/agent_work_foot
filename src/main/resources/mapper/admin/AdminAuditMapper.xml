@@ -19,4 +19,52 @@
         WHERE target_user_id = #{targetUserId}
           AND action = #{action}
     </select>
+
+    <sql id="auditLogFilters">
+        <where>
+            <if test="query.adminUserId != null">
+                admin_log.admin_user_id = #{query.adminUserId}
+            </if>
+            <if test="query.targetUserId != null">
+                AND admin_log.target_user_id = #{query.targetUserId}
+            </if>
+            <if test="query.action != null">
+                AND admin_log.action = #{query.action}
+            </if>
+            <if test="query.result != null">
+                AND admin_log.result = #{query.result}
+            </if>
+            AND admin_log.created_at &gt;= #{query.startAt}
+            AND admin_log.created_at &lt; #{query.endAt}
+        </where>
+    </sql>
+
+    <!-- 作用：读取管理员审计页；账号识别字段仅来自users，不读取用户业务表。 -->
+    <select id="selectAuditLogPage" resultType="com.hyf.agent_work_foot.admin.mapper.AdminAuditMapper$AdminAuditLogRow">
+        SELECT admin_log.id,
+               admin_log.admin_user_id AS adminUserId,
+               admin_user.email AS adminEmail,
+               admin_user.nickname AS adminNickname,
+               admin_log.target_user_id AS targetUserId,
+               target_user.email AS targetEmail,
+               target_user.nickname AS targetNickname,
+               admin_log.action,
+               admin_log.result,
+               admin_log.request_id AS requestId,
+               admin_log.detail_json AS detailJson,
+               admin_log.created_at AS createdAt
+        FROM admin_audit_logs admin_log
+        LEFT JOIN users admin_user ON admin_user.id = admin_log.admin_user_id
+        LEFT JOIN users target_user ON target_user.id = admin_log.target_user_id
+        <include refid="auditLogFilters"/>
+        ORDER BY admin_log.created_at DESC, admin_log.id DESC
+        LIMIT #{query.size} OFFSET #{query.offset}
+    </select>
+
+    <!-- 作用：统计审计筛选页总数；与列表使用完全相同的过滤条件。 -->
+    <select id="countAuditLogs" resultType="long">
+        SELECT COUNT(*)
+        FROM admin_audit_logs admin_log
+        <include refid="auditLogFilters"/>
+    </select>
 </mapper>

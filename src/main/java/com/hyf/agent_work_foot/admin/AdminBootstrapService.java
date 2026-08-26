@@ -7,7 +7,6 @@ import com.hyf.agent_work_foot.rbac.mapper.RbacMapper;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,25 +32,21 @@ public class AdminBootstrapService {
         this.clock = clock;
     }
 
-    /** 作用：把一个已注册普通用户提升为管理员。输入：标准邮箱候选和ADMIN/SUPER_ADMIN角色。输出：目标用户ID。逻辑：行锁、角色更新、安全版本和会话撤销同事务，重复同角色幂等。 */
+    /** 作用：把一个已注册普通用户提升为ADMIN。输入：标准邮箱候选。输出：目标用户ID。逻辑：行锁、角色更新、安全版本和会话撤销同事务，重复同角色幂等。 */
     @Transactional
-    public String promote(String email, String roleCode) {
+    public String promote(String email) {
         String normalizedEmail = requireEmail(email);
-        String normalizedRole = roleCode == null ? "" : roleCode.trim().toUpperCase(Locale.ROOT);
-        if (!List.of(AppConstants.ROLE_ADMIN, AppConstants.ROLE_SUPER_ADMIN).contains(normalizedRole)) {
-            throw new IllegalArgumentException("bootstrap-admin角色只能是ADMIN或SUPER_ADMIN");
-        }
         AdminUserMapper.LockedAdminUser user = userMapper.selectByEmailForUpdate(normalizedEmail);
         if (user == null || !AppConstants.USER_STATUS_ACTIVE.equals(user.status())) {
             throw new IllegalStateException("bootstrap-admin目标必须是已注册ACTIVE用户");
         }
-        if (normalizedRole.equals(user.role())) {
+        if (AppConstants.ROLE_ADMIN.equals(user.role())) {
             return user.id();
         }
         if (!AppConstants.ROLE_USER.equals(user.role())) {
             throw new IllegalStateException("bootstrap-admin只允许提升普通USER");
         }
-        RbacMapper.RoleRow role = rbacMapper.selectActiveRoleByCode(normalizedRole);
+        RbacMapper.RoleRow role = rbacMapper.selectActiveRoleByCode(AppConstants.ROLE_ADMIN);
         if (role == null || userMapper.updateRole(user.id(), role.id(), user.authVersion()) != 1) {
             throw new IllegalStateException("bootstrap-admin角色提升失败");
         }

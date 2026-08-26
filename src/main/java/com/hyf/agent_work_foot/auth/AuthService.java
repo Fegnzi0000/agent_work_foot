@@ -3,7 +3,6 @@ package com.hyf.agent_work_foot.auth;
 import com.hyf.agent_work_foot.auth.mapper.AuthMapper;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.AppConstants;
-import com.hyf.agent_work_foot.common.AppPermissions;
 import com.hyf.agent_work_foot.config.AuthProperties;
 import com.hyf.agent_work_foot.food.FoodInitializationService;
 import java.nio.charset.StandardCharsets;
@@ -37,7 +36,6 @@ public class AuthService {
     private final AuthProperties properties;
     private final FoodInitializationService foodInitializationService;
     private final Clock clock;
-    private final RolePermissionResolver permissionResolver;
     private final TemporaryCredentialService temporaryCredentialService;
 
     /**
@@ -53,7 +51,6 @@ public class AuthService {
             AuthProperties properties,
             FoodInitializationService foodInitializationService,
             Clock clock,
-            RolePermissionResolver permissionResolver,
             TemporaryCredentialService temporaryCredentialService
     ) {
         this.mapper = mapper;
@@ -62,7 +59,6 @@ public class AuthService {
         this.properties = properties;
         this.foodInitializationService = foodInitializationService;
         this.clock = clock;
-        this.permissionResolver = permissionResolver;
         this.temporaryCredentialService = temporaryCredentialService;
     }
 
@@ -213,7 +209,7 @@ public class AuthService {
         if (user.mustChangePassword()) {
             return "CHANGE_PASSWORD";
         }
-        if (permissionResolver.hasPermission(user.id(), AppPermissions.ADMIN_PORTAL_ACCESS)) {
+        if (AppConstants.ROLE_ADMIN.equals(user.role())) {
             return "ADMIN_HOME";
         }
         return user.onboardingCompleted() ? "HOME" : "ONBOARDING";

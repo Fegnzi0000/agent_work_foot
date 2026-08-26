@@ -25,7 +25,6 @@ app:
     bootstrap:
       enabled: false
       email: ""
-      role: SUPER_ADMIN
   account-security:
     rate-limit:
       max-attempts: 5

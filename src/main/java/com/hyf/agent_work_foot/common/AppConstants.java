@@ -8,7 +8,6 @@ package com.hyf.agent_work_foot.common;
 public final class AppConstants {
     public static final String ROLE_USER = "USER";
     public static final String ROLE_ADMIN = "ADMIN";
-    public static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     public static final String USER_STATUS_ACTIVE = "ACTIVE";
     public static final String USER_STATUS_DISABLED = "DISABLED";
     public static final String USER_STATUS_CANCELLED = "CANCELLED";

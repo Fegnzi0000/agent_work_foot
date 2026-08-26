@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- Dashboard聚合查询：created_at以UTC保存，使用固定+08:00转换成产品自然日。 -->
+<mapper namespace="com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper">
+    <select id="selectSummary" resultType="com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper$DashboardSummaryRow">
+        SELECT
+            (SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id
+             WHERE r.code = 'USER' AND u.status &lt;&gt; 'CANCELLED') AS totalUsers,
+            (SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id
+             WHERE r.code = 'USER' AND u.status &lt;&gt; 'CANCELLED'
+               AND u.created_at &gt;= #{todayStart} AND u.created_at &lt; #{tomorrowStart}) AS todayNewUsers,
+            (SELECT COUNT(DISTINCT a.user_id) FROM (
+                SELECT d.user_id FROM diet_records d
+                 WHERE d.deleted_at IS NULL AND d.created_at &gt;= #{rangeStart} AND d.created_at &lt; #{rangeEnd}
+                UNION ALL
+                SELECT s.user_id FROM slot_spins s
+                 WHERE s.created_at &gt;= #{rangeStart} AND s.created_at &lt; #{rangeEnd}
+            ) a JOIN users u ON u.id = a.user_id JOIN roles r ON r.id = u.role_id WHERE r.code = 'USER') AS activeUsers,
+            (SELECT COUNT(*) FROM diet_records d JOIN users u ON u.id = d.user_id JOIN roles r ON r.id = u.role_id
+             WHERE r.code = 'USER' AND d.deleted_at IS NULL AND d.business_date BETWEEN #{businessStart} AND #{businessEnd}) AS dietRecords,
+            (SELECT COUNT(*) FROM slot_spins s JOIN users u ON u.id = s.user_id JOIN roles r ON r.id = u.role_id
+             WHERE r.code = 'USER' AND s.created_at &gt;= #{rangeStart} AND s.created_at &lt; #{rangeEnd}) AS slotSpins,
+            (SELECT COUNT(*) FROM slot_spins s JOIN users u ON u.id = s.user_id JOIN roles r ON r.id = u.role_id
+             WHERE r.code = 'USER' AND s.status = 'CONFIRMED' AND s.created_at &gt;= #{rangeStart} AND s.created_at &lt; #{rangeEnd}) AS slotConfirmed
+    </select>
+
+    <select id="selectDailyNewUsers" resultType="com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper$DashboardDailyRow">
+        SELECT DATE_FORMAT(CONVERT_TZ(u.created_at, '+00:00', '+08:00'), '%Y-%m-%d') AS date, COUNT(*) AS count
+        FROM users u JOIN roles r ON r.id = u.role_id
+        WHERE r.code = 'USER' AND u.status &lt;&gt; 'CANCELLED'
+          AND u.created_at &gt;= #{rangeStart} AND u.created_at &lt; #{rangeEnd}
+        GROUP BY DATE(CONVERT_TZ(u.created_at, '+00:00', '+08:00'))
+    </select>
+
+    <select id="selectDailyActiveUsers" resultType="com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper$DashboardDailyRow">
+        SELECT a.date, COUNT(DISTINCT a.user_id) AS count
+        FROM (
+            SELECT DATE_FORMAT(CONVERT_TZ(d.created_at, '+00:00', '+08:00'), '%Y-%m-%d') AS date, d.user_id
+            FROM diet_records d WHERE d.deleted_at IS NULL AND d.created_at &gt;= #{rangeStart} AND d.created_at &lt; #{rangeEnd}
+            UNION ALL
+            SELECT DATE_FORMAT(CONVERT_TZ(s.created_at, '+00:00', '+08:00'), '%Y-%m-%d') AS date, s.user_id
+            FROM slot_spins s WHERE s.created_at &gt;= #{rangeStart} AND s.created_at &lt; #{rangeEnd}
+        ) a JOIN users u ON u.id = a.user_id JOIN roles r ON r.id = u.role_id
+        WHERE r.code = 'USER'
+        GROUP BY a.date
+    </select>
+
+    <select id="selectDailyDietRecords" resultType="com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper$DashboardDailyRow">
+        SELECT DATE_FORMAT(d.business_date, '%Y-%m-%d') AS date, COUNT(*) AS count
+        FROM diet_records d JOIN users u ON u.id = d.user_id JOIN roles r ON r.id = u.role_id
+        WHERE r.code = 'USER' AND d.deleted_at IS NULL AND d.business_date BETWEEN #{businessStart} AND #{businessEnd}
+        GROUP BY d.business_date
+    </select>
+
+    <select id="selectDietRecordSources" resultType="com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper$DashboardSourceRow">
+        SELECT d.source, COUNT(*) AS count
+        FROM diet_records d JOIN users u ON u.id = d.user_id JOIN roles r ON r.id = u.role_id
+        WHERE r.code = 'USER' AND d.deleted_at IS NULL AND d.business_date BETWEEN #{businessStart} AND #{businessEnd}
+          AND d.source IN ('MANUAL', 'SLOT')
+        GROUP BY d.source
+    </select>
+</mapper>

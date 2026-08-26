@@ -5,14 +5,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.time.Instant;
 import org.apache.ibatis.annotations.Param;
 
-/** Admin用户数据访问接口，负责分页、账号行锁、状态、密码和角色更新。 */
+/** Admin用户数据访问接口，负责普通用户分页、账号行锁、状态、密码和角色更新。 */
 public interface AdminUserMapper {
-    /** 作用：分页查询可见账号。输入：MP分页、邮箱前缀、状态和管理员可见性。输出：分页投影。逻辑：普通ADMIN只查询USER。 */
+    /** 作用：分页查询普通用户。输入：MP分页、邮箱前缀和状态。输出：分页投影。逻辑：管理员列表永远只返回USER。 */
     IPage<AdminUserRow> selectAdminUserPage(
             Page<AdminUserRow> page,
             @Param("emailPrefix") String emailPrefix,
-            @Param("status") String status,
-            @Param("includeAdmins") boolean includeAdmins
+            @Param("status") String status
     );
 
     /** 作用：按ID锁定管理目标。输入：用户ID。输出：账号状态或空。逻辑：状态修改和密码重置串行执行。 */

@@ -98,12 +98,7 @@ public abstract class AbstractMySqlIntegrationTest {
         return adminAccount(AppConstants.ROLE_ADMIN);
     }
 
-    /** 作用：创建数据库真实存在的超级管理员。输入：无。输出：SUPER_ADMIN夹具。逻辑：用于验证管理员账号管理特权。 */
-    protected AdminAccount superAdminAccount() {
-        return adminAccount(AppConstants.ROLE_SUPER_ADMIN);
-    }
-
-    /** 作用：按系统角色创建管理员夹具。输入：ADMIN或SUPER_ADMIN。输出：完整登录资料。逻辑：统一生产Mapper建号和JWT版本。 */
+    /** 作用：创建数据库真实存在的ADMIN。输入：无。输出：完整登录资料。逻辑：统一生产Mapper建号和JWT版本。 */
     private AdminAccount adminAccount(String role) {
         String id = UUID.randomUUID().toString();
         String email = "admin+" + UUID.randomUUID() + "@example.com";

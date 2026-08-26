@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- Admin用户查询和高风险条件更新；所有变量使用#{...}预编译绑定。 -->
 <mapper namespace="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper">
-    <!-- 作用：分页查询账号；输入：邮箱前缀、状态、管理员可见性；输出：最小用户投影。 -->
+    <!-- 作用：分页查询普通用户；输入：邮箱前缀和状态；输出：最小用户投影。 -->
     <select id="selectAdminUserPage" resultType="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper$AdminUserRow">
         SELECT u.id,
                u.email,
@@ -15,7 +15,7 @@
                u.last_login_at AS lastLoginAt
         FROM users u
         JOIN roles r ON r.id = u.role_id AND r.is_active = 1
-        WHERE (#{includeAdmins} = 1 OR r.code = 'USER')
+        WHERE r.code = 'USER'
         <if test="emailPrefix != null and emailPrefix != ''">
             AND u.email LIKE CONCAT(#{emailPrefix}, '%') ESCAPE '\\'
         </if>

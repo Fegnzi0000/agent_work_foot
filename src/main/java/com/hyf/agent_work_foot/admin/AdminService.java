@@ -5,13 +5,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hyf.agent_work_foot.admin.entity.TemporaryPasswordEntity;
 import com.hyf.agent_work_foot.admin.mapper.AdminUserMapper;
 import com.hyf.agent_work_foot.admin.mapper.TemporaryPasswordMapper;
-import com.hyf.agent_work_foot.auth.RolePermissionResolver;
 import com.hyf.agent_work_foot.auth.mapper.AccountSecurityMapper;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.AppConstants;
-import com.hyf.agent_work_foot.common.AppPermissions;
 import com.hyf.agent_work_foot.config.AdminProperties;
-import com.hyf.agent_work_foot.rbac.mapper.RbacMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -31,8 +28,6 @@ public class AdminService {
     private final AdminUserMapper userMapper;
     private final TemporaryPasswordMapper temporaryPasswordMapper;
     private final AccountSecurityMapper accountSecurityMapper;
-    private final RbacMapper rbacMapper;
-    private final RolePermissionResolver permissionResolver;
     private final AdminAuditService auditService;
     private final AdminRateLimiter rateLimiter;
     private final TemporaryPasswordGenerator passwordGenerator;
@@ -45,8 +40,6 @@ public class AdminService {
             AdminUserMapper userMapper,
             TemporaryPasswordMapper temporaryPasswordMapper,
             AccountSecurityMapper accountSecurityMapper,
-            RbacMapper rbacMapper,
-            RolePermissionResolver permissionResolver,
             AdminAuditService auditService,
             AdminRateLimiter rateLimiter,
             TemporaryPasswordGenerator passwordGenerator,
@@ -57,8 +50,6 @@ public class AdminService {
         this.userMapper = userMapper;
         this.temporaryPasswordMapper = temporaryPasswordMapper;
         this.accountSecurityMapper = accountSecurityMapper;
-        this.rbacMapper = rbacMapper;
-        this.permissionResolver = permissionResolver;
         this.auditService = auditService;
         this.rateLimiter = rateLimiter;
         this.passwordGenerator = passwordGenerator;
@@ -67,7 +58,7 @@ public class AdminService {
         this.clock = clock;
     }
 
-    /** 作用：分页查询当前管理员可见账号。输入：管理员、邮箱前缀、状态和0基分页。输出：最小账号分页。逻辑：ADMIN只看USER，特权角色可看管理员。 */
+    /** 作用：分页查询普通用户。输入：管理员、邮箱前缀、状态和0基分页。输出：最小账号分页。逻辑：管理员列表只看USER。 */
     public AdminResponses.AdminUserPageData list(
             String adminUserId,
             String email,
@@ -78,9 +69,8 @@ public class AdminService {
         validatePage(page, size);
         String normalizedStatus = normalizeStatus(status);
         String emailPrefix = normalizeEmailPrefix(email);
-        boolean includeAdmins = permissionResolver.hasPermission(adminUserId, AppPermissions.ADMIN_ACCOUNT_MANAGE);
         IPage<AdminUserMapper.AdminUserRow> result = userMapper.selectAdminUserPage(
-                new Page<>(page + 1L, size), emailPrefix, normalizedStatus, includeAdmins
+                new Page<>(page + 1L, size), emailPrefix, normalizedStatus
         );
         List<AdminResponses.AdminUserData> items = result.getRecords().stream().map(this::response).toList();
         return new AdminResponses.AdminUserPageData(
@@ -102,12 +92,6 @@ public class AdminService {
             auditService.success(adminUserId, target.id(), "USER_STATUS_UNCHANGED",
                     Map.of("before", target.status(), "after", status, "targetRole", target.role()));
             return response(userMapper.selectById(target.id()));
-        }
-        if (AppConstants.ROLE_SUPER_ADMIN.equals(target.role())
-                && AppConstants.USER_STATUS_DISABLED.equals(status)
-                && rbacMapper.countActiveSuperAdmins() <= 1) {
-            reject(adminUserId, target.id(), "USER_STATUS_UPDATE", HttpStatus.CONFLICT,
-                    "LAST_SUPER_ADMIN_PROTECTED", "不能禁用最后一个超级管理员");
         }
         if (userMapper.updateStatus(target.id(), status, target.authVersion()) != 1) {
             throw new ApiException(HttpStatus.CONFLICT, "USER_STATUS_TRANSITION_INVALID", "账号状态已发生变化");
@@ -182,17 +166,13 @@ public class AdminService {
         return target;
     }
 
-    /** 作用：校验自我操作和管理员目标权限。输入：操作者、目标和动作。输出：允许时无返回。逻辑：普通ADMIN只能管理USER。 */
+    /** 作用：校验管理目标。输入：操作者、目标和动作。输出：允许时无返回。逻辑：管理员只可操作USER。 */
     private void validateTargetAuthority(
             String adminUserId,
             AdminUserMapper.LockedAdminUser target,
             String action
     ) {
-        boolean targetIsAdmin = !AppConstants.ROLE_USER.equals(target.role());
-        boolean canManageAdmins = permissionResolver.hasPermission(
-                adminUserId, AppPermissions.ADMIN_ACCOUNT_MANAGE
-        );
-        if (adminUserId.equals(target.id()) || targetIsAdmin && !canManageAdmins) {
+        if (!AppConstants.ROLE_USER.equals(target.role())) {
             reject(adminUserId, target.id(), action, HttpStatus.FORBIDDEN,
                     "ADMIN_TARGET_FORBIDDEN", "无权操作该管理员账号");
         }

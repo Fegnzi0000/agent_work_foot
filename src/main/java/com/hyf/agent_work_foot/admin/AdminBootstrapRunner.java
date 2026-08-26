@@ -33,10 +33,8 @@ public class AdminBootstrapRunner implements ApplicationRunner {
     /** 作用：应用启动后执行一次受控角色提升。输入：启动参数。输出：无。逻辑：只记录用户ID和角色，不记录完整邮箱。 */
     @Override
     public void run(ApplicationArguments args) {
-        String userId = service.promote(
-                properties.bootstrap().email(), properties.bootstrap().role()
-        );
-        LOGGER.info("bootstrap-admin completed userId={} role={}", userId, properties.bootstrap().role());
+        String userId = service.promote(properties.bootstrap().email());
+        LOGGER.info("bootstrap-admin completed userId={} role=ADMIN", userId);
         SpringApplication.exit(context, () -> 0);
     }
 }

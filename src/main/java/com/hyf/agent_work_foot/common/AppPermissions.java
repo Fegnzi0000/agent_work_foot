@@ -18,12 +18,6 @@ public final class AppPermissions {
     public static final String DIET_STATISTICS = "DIET_STATISTICS";
     public static final String SLOT_SPIN = "SLOT_SPIN";
     public static final String SLOT_CONFIRM = "SLOT_CONFIRM";
-    public static final String ADMIN_PORTAL_ACCESS = "ADMIN_PORTAL_ACCESS";
-    public static final String ADMIN_USER_LIST = "ADMIN_USER_LIST";
-    public static final String ADMIN_USER_STATUS_UPDATE = "ADMIN_USER_STATUS_UPDATE";
-    public static final String ADMIN_TEMP_PASSWORD_CREATE = "ADMIN_TEMP_PASSWORD_CREATE";
-    public static final String ADMIN_ACCOUNT_MANAGE = "ADMIN_ACCOUNT_MANAGE";
-
     /** 作用：禁止实例化。输入：无。输出：无。逻辑：权限只通过静态常量访问。 */
     private AppPermissions() {
     }

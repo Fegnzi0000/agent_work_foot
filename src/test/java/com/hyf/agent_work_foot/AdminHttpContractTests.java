@@ -1,6 +1,7 @@
 package com.hyf.agent_work_foot;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -9,7 +10,6 @@ import com.hyf.agent_work_foot.admin.mapper.AdminAuditMapper;
 import com.hyf.agent_work_foot.auth.AuthRequests;
 import com.hyf.agent_work_foot.auth.AuthService;
 import com.hyf.agent_work_foot.common.ApiException;
-import com.hyf.agent_work_foot.common.AppPermissions;
 import com.hyf.agent_work_foot.rbac.mapper.RbacMapper;
 import java.util.HashSet;
 import java.util.Map;
@@ -24,7 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
-/** Admin独立入口、动态RBAC、账号状态、一次性临时密码、审计、限流和bootstrap的HTTP契约测试。 */
+/** Admin独立入口、两级角色、账号状态、一次性临时密码、审计、限流和bootstrap的HTTP契约测试。 */
 class AdminHttpContractTests extends AbstractMySqlIntegrationTest {
     @Autowired
     private RbacMapper rbacMapper;
@@ -38,12 +38,11 @@ class AdminHttpContractTests extends AbstractMySqlIntegrationTest {
     @Autowired
     private AdminBootstrapService bootstrapService;
 
-    /** 作用：验证数据库权限和管理员独立入口。输入：USER、ADMIN和SUPER_ADMIN夹具。输出：不同nextStep及403/200边界。逻辑：后端不依赖前端页面控制权限。 */
+    /** 作用：验证两级角色和管理员独立入口。输入：USER和ADMIN夹具。输出：不同nextStep及403/200边界。逻辑：后端不依赖前端页面控制权限。 */
     @Test
     void separatesAdminPortalFromUserBusinessPermissions() throws Exception {
         JsonNode user = register("rbac-user").path("data");
         AdminAccount admin = adminAccount();
-        AdminAccount superAdmin = superAdminAccount();
 
         assertEquals(403, perform(MockMvcRequestBuilders.get("/api/v1/admin/users"),
                 null, user.path("accessToken").asText()).getResponse().getStatus());
@@ -51,19 +50,12 @@ class AdminHttpContractTests extends AbstractMySqlIntegrationTest {
                 null, admin.accessToken()).getResponse().getStatus());
         assertEquals("ADMIN_HOME", json(login(admin.email(), admin.password()))
                 .path("data").path("nextStep").asText());
-        assertEquals("ADMIN_HOME", json(login(superAdmin.email(), superAdmin.password()))
-                .path("data").path("nextStep").asText());
-        assertTrue(rbacMapper.selectPermissionCodesByUserId(superAdmin.id())
-                .contains(AppPermissions.ADMIN_ACCOUNT_MANAGE));
 
         JsonNode adminPage = json(perform(MockMvcRequestBuilders.get("/api/v1/admin/users"),
                 null, admin.accessToken())).path("data");
         assertTrue(adminPage.path("items").findValuesAsText("role").stream()
                 .allMatch("USER"::equals));
-        JsonNode superPage = json(perform(MockMvcRequestBuilders.get("/api/v1/admin/users"),
-                null, superAdmin.accessToken())).path("data");
-        assertTrue(superPage.path("items").findValuesAsText("role").stream()
-                .anyMatch(role -> role.equals("ADMIN") || role.equals("SUPER_ADMIN")));
+        assertNull(rbacMapper.selectActiveRoleByCode("SUPER_ADMIN"));
     }
 
     /** 作用：验证禁用、启用、幂等和全部会话即时失效。输入：注册用户和ADMIN。输出：状态200、旧Token401、重新登录成功。逻辑：真实转换递增authVersion并撤销Refresh Token。 */
@@ -91,21 +83,19 @@ class AdminHttpContractTests extends AbstractMySqlIntegrationTest {
         assertEquals(1, auditMapper.countByTargetAndAction(userId, "USER_STATUS_UNCHANGED"));
     }
 
-    /** 作用：验证管理员账号必须由特权角色管理且不能自我操作。输入：两个ADMIN和一个SUPER_ADMIN。输出：普通管理员403、超级管理员200、自操作403。逻辑：目标角色额外检查ADMIN_ACCOUNT_MANAGE。 */
+    /** 作用：验证管理员只能管理普通用户。输入：两个ADMIN。输出：操作管理员目标一律403。逻辑：服务层固定拒绝非USER目标。 */
     @Test
     void requiresExplicitPermissionToManageOtherAdmins() throws Exception {
         AdminAccount first = adminAccount();
         AdminAccount second = adminAccount();
-        AdminAccount superAdmin = superAdminAccount();
 
         MvcResult forbidden = status(first.accessToken(), second.id(), "DISABLED");
         assertEquals(403, forbidden.getResponse().getStatus());
         assertEquals("ADMIN_TARGET_FORBIDDEN", json(forbidden).path("code").asText());
-        assertEquals(200, status(superAdmin.accessToken(), second.id(), "DISABLED")
+        assertEquals(403, status(second.accessToken(), first.id(), "DISABLED")
                 .getResponse().getStatus());
-        assertEquals(403, status(superAdmin.accessToken(), superAdmin.id(), "DISABLED")
-                .getResponse().getStatus());
-        assertTrue(auditMapper.countByTargetAndAction(second.id(), "USER_DISABLED") >= 1);
+        assertEquals(1, auditMapper.countByTargetAndAction(first.id(), "USER_STATUS_UPDATE"));
+        assertEquals(1, auditMapper.countByTargetAndAction(second.id(), "USER_STATUS_UPDATE"));
     }
 
     /** 作用：验证管理员重置密码的完整生命周期。输入：注册用户和一次性临时密码。输出：旧凭据失效、临时登录一次、强制改密及新密码成功。逻辑：密码、Token、临时记录和安全版本同事务。 */
@@ -172,19 +162,19 @@ class AdminHttpContractTests extends AbstractMySqlIntegrationTest {
         }
     }
 
-    /** 作用：验证受控bootstrap提升及旧会话失效。输入：已注册ACTIVE USER。输出：SUPER_ADMIN登录入口、旧Token401和重复执行幂等。逻辑：不通过HTTP或明文密码提权。 */
+    /** 作用：验证受控bootstrap提升及旧会话失效。输入：已注册ACTIVE USER。输出：ADMIN登录入口、旧Token401和重复执行幂等。逻辑：不通过HTTP或明文密码提权。 */
     @Test
     void bootstrapsRegisteredUserWithoutHttpPrivilegeEndpoint() throws Exception {
         JsonNode user = register("bootstrap-admin").path("data");
         String userId = user.path("user").path("id").asText();
         String email = user.path("user").path("email").asText();
         String oldAccess = user.path("accessToken").asText();
-        assertEquals(userId, bootstrapService.promote(email, "SUPER_ADMIN"));
-        assertEquals(userId, bootstrapService.promote(email, "SUPER_ADMIN"));
+        assertEquals(userId, bootstrapService.promote(email));
+        assertEquals(userId, bootstrapService.promote(email));
         assertEquals(401, perform(MockMvcRequestBuilders.get("/api/v1/users/me"), null, oldAccess)
                 .getResponse().getStatus());
         JsonNode loggedIn = json(login(email, "Pass_123")).path("data");
-        assertEquals("SUPER_ADMIN", loggedIn.path("user").path("role").asText());
+        assertEquals("ADMIN", loggedIn.path("user").path("role").asText());
         assertEquals("ADMIN_HOME", loggedIn.path("nextStep").asText());
     }
 

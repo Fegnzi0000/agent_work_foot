@@ -28,9 +28,9 @@ public class AdminController {
         this.service = service;
     }
 
-    /** 作用：分页查询可管理账号。输入：认证主体和筛选。输出：200分页响应。逻辑：方法权限要求ADMIN_USER_LIST。 */
+    /** 作用：分页查询普通用户。输入：认证主体和筛选。输出：200分页响应。逻辑：仅ADMIN角色可访问。 */
     @GetMapping
-    @PreAuthorize("hasAuthority('ADMIN_USER_LIST')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<AdminResponses.AdminUserPageData> list(
             Authentication authentication,
             @RequestParam(required = false) String email,
@@ -45,7 +45,7 @@ public class AdminController {
 
     /** 作用：启用或禁用账号。输入：目标UUID、严格请求和操作者。输出：200最终账号。逻辑：额外目标权限由Service校验。 */
     @PatchMapping("/{userId}/status")
-    @PreAuthorize("hasAuthority('ADMIN_USER_STATUS_UPDATE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<AdminResponses.AdminUserData> updateStatus(
             @PathVariable UUID userId,
             @Valid @RequestBody AdminRequests.StatusPatchRequest request,
@@ -58,7 +58,7 @@ public class AdminController {
 
     /** 作用：生成一次性临时密码。输入：目标UUID、操作者和来源IP。输出：201且明文只在本响应出现。逻辑：请求不接受正文。 */
     @PostMapping("/{userId}/temporary-password")
-    @PreAuthorize("hasAuthority('ADMIN_TEMP_PASSWORD_CREATE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<AdminResponses.TemporaryPasswordData>> createTemporaryPassword(
             @PathVariable UUID userId,
             Authentication authentication,
