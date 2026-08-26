@@ -1,20 +1,55 @@
+-- 当前开发基线：创建最终表结构、索引和必要种子数据。
+-- 新环境只存在USER与ADMIN两级角色；历史升级逻辑不属于初始化数据。
+CREATE TABLE roles (
+    id CHAR(36) NOT NULL,
+    code VARCHAR(32) NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    is_system TINYINT(1) NOT NULL DEFAULT 1,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_roles_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE permissions (
+    id CHAR(36) NOT NULL,
+    code VARCHAR(64) NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    description VARCHAR(255) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_permissions_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE role_permissions (
+    role_id CHAR(36) NOT NULL,
+    permission_id CHAR(36) NOT NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (role_id, permission_id),
+    KEY idx_role_permissions_permission_id (permission_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE users (
     id CHAR(36) NOT NULL,
     email VARCHAR(254) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     nickname VARCHAR(20) NOT NULL,
     avatar_object_key VARCHAR(512) NULL,
-    role VARCHAR(16) NOT NULL DEFAULT 'USER',
+    role_id CHAR(36) NOT NULL,
     status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
     onboarding_completed TINYINT(1) NOT NULL DEFAULT 0,
     must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+    auth_version INT NOT NULL DEFAULT 0,
     last_login_at DATETIME(3) NULL,
     cancelled_at DATETIME(3) NULL,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_users_email (email),
-    KEY idx_users_status_created_at (status, created_at)
+    KEY idx_users_status_created_at (status, created_at),
+    KEY idx_users_role_id (role_id),
+    KEY idx_users_dashboard_role_status_created_at (role_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE refresh_tokens (
@@ -57,7 +92,9 @@ CREATE TABLE admin_audit_logs (
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     KEY idx_admin_audit_logs_admin_created_at (admin_user_id, created_at),
-    KEY idx_admin_audit_logs_target_created_at (target_user_id, created_at)
+    KEY idx_admin_audit_logs_target_created_at (target_user_id, created_at),
+    KEY idx_admin_audit_logs_created_at_id (created_at, id),
+    KEY idx_admin_audit_logs_action_result_created_at (action, result, created_at, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE preference_presets (
@@ -168,7 +205,9 @@ CREATE TABLE diet_records (
     KEY idx_diet_records_user_business_date (user_id, business_date),
     KEY idx_diet_records_user_eaten_at (user_id, eaten_at),
     KEY idx_diet_records_user_deleted_at (user_id, deleted_at),
-    KEY idx_diet_records_user_source_date (user_id, source, business_date)
+    KEY idx_diet_records_user_source_date (user_id, source, business_date),
+    KEY idx_diet_records_dashboard_deleted_business_source_user (deleted_at, business_date, source, user_id),
+    KEY idx_diet_records_dashboard_deleted_created_user (deleted_at, created_at, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE slot_spins (
@@ -187,8 +226,37 @@ CREATE TABLE slot_spins (
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     KEY idx_slot_spins_user_status_expires_at (user_id, status, expires_at),
-    KEY idx_slot_spins_expires_at (expires_at)
+    KEY idx_slot_spins_expires_at (expires_at),
+    KEY idx_slot_spins_dashboard_created_status_user (created_at, status, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO roles (id, code, name) VALUES
+    ('00000000-0000-0000-0000-000000000101', 'USER', '普通用户'),
+    ('00000000-0000-0000-0000-000000000102', 'ADMIN', '管理员');
+
+INSERT INTO permissions (id, code, name, description) VALUES
+    ('00000000-0000-0000-0000-000000000201', 'ACCOUNT_SELF_VIEW', '读取本人资料', '读取当前认证账号的公开资料'),
+    ('00000000-0000-0000-0000-000000000202', 'ACCOUNT_CHANGE_PASSWORD', '修改本人密码', '修改正式或临时密码'),
+    ('00000000-0000-0000-0000-000000000203', 'ACCOUNT_CANCEL', '注销本人账号', '将普通用户账号软注销'),
+    ('00000000-0000-0000-0000-000000000204', 'FOOD_LIST', '食物列表', '分页筛选本人食物池'),
+    ('00000000-0000-0000-0000-000000000205', 'FOOD_VIEW', '食物详情', '读取本人食物详情'),
+    ('00000000-0000-0000-0000-000000000206', 'FOOD_CREATE', '创建食物', '向本人食物池新增食物'),
+    ('00000000-0000-0000-0000-000000000207', 'FOOD_UPDATE', '修改食物', '修改本人食物池'),
+    ('00000000-0000-0000-0000-000000000208', 'FOOD_DELETE', '删除食物', '软删除本人食物'),
+    ('00000000-0000-0000-0000-000000000209', 'DIET_LIST', '饮食列表', '查询本人饮食记录'),
+    ('00000000-0000-0000-0000-000000000210', 'DIET_CREATE', '创建饮食记录', '创建本人饮食记录'),
+    ('00000000-0000-0000-0000-000000000211', 'DIET_UPDATE', '修改饮食记录', '修改本人饮食记录'),
+    ('00000000-0000-0000-0000-000000000212', 'DIET_DELETE', '删除饮食记录', '软删除本人饮食记录'),
+    ('00000000-0000-0000-0000-000000000213', 'DIET_STATISTICS', '饮食统计', '统计本人消费记录'),
+    ('00000000-0000-0000-0000-000000000214', 'SLOT_SPIN', '老虎机抽取', '生成本人随机食物结果'),
+    ('00000000-0000-0000-0000-000000000215', 'SLOT_CONFIRM', '老虎机确认', '确认老虎机结果并记录饮食');
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT '00000000-0000-0000-0000-000000000101', id FROM permissions;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT '00000000-0000-0000-0000-000000000102', id
+FROM permissions WHERE code IN ('ACCOUNT_SELF_VIEW', 'ACCOUNT_CHANGE_PASSWORD');
 
 INSERT INTO preference_presets (id, kind, code, label, sort_order) VALUES
     ('00000000-0000-4000-8000-000000000001', 'TASTE', 'TASTE_LIGHT', '清淡', 1),
@@ -208,9 +276,7 @@ INSERT INTO preference_presets (id, kind, code, label, sort_order) VALUES
     ('00000000-0000-4000-8000-000000000015', 'DISLIKE', 'DISLIKE_GINGER', '不吃姜', 3),
     ('00000000-0000-4000-8000-000000000016', 'DISLIKE', 'DISLIKE_GARLIC', '不吃蒜', 4);
 
-INSERT INTO food_default_templates
-    (id, template_version, name, normalized_name, category, default_price, tags_json, sort_order)
-VALUES
+INSERT INTO food_default_templates (id, template_version, name, normalized_name, category, default_price, tags_json, sort_order) VALUES
     ('10000000-0000-4000-8000-000000000001', 'v1', '鸡腿饭', '鸡腿饭', '米饭', 18.00, JSON_ARRAY('主食', '肉类', '咸香'), 1),
     ('10000000-0000-4000-8000-000000000002', 'v1', '番茄鸡蛋饭', '番茄鸡蛋饭', '米饭', 15.00, JSON_ARRAY('主食', '蛋类', '清淡'), 2),
     ('10000000-0000-4000-8000-000000000003', 'v1', '牛肉面', '牛肉面', '面食', 20.00, JSON_ARRAY('主食', '肉类', '汤面'), 3),
