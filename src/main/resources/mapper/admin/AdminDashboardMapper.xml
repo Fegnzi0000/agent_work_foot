@@ -29,7 +29,7 @@
         FROM users u JOIN roles r ON r.id = u.role_id
         WHERE r.code = 'USER' AND u.status &lt;&gt; 'CANCELLED'
           AND u.created_at &gt;= #{rangeStart} AND u.created_at &lt; #{rangeEnd}
-        GROUP BY DATE(CONVERT_TZ(u.created_at, '+00:00', '+08:00'))
+        GROUP BY DATE_FORMAT(CONVERT_TZ(u.created_at, '+00:00', '+08:00'), '%Y-%m-%d')
     </select>
 
     <select id="selectDailyActiveUsers" resultType="com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper$DashboardDailyRow">
