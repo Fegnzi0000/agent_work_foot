@@ -22,11 +22,14 @@
 
     <sql id="auditLogFilters">
         <where>
-            <if test="query.adminUserId != null">
-                admin_log.admin_user_id = #{query.adminUserId}
+            <if test="query.adminAccount != null">
+                admin_user.admin_login_name LIKE CONCAT('%', #{query.adminAccount}, '%') ESCAPE '\\'
             </if>
-            <if test="query.targetUserId != null">
-                AND admin_log.target_user_id = #{query.targetUserId}
+            <if test="query.targetUserEmail != null">
+                AND target_user.email LIKE CONCAT('%', #{query.targetUserEmail}, '%') ESCAPE '\\'
+            </if>
+            <if test="query.targetUserNickname != null">
+                AND target_user.nickname LIKE CONCAT('%', #{query.targetUserNickname}, '%') ESCAPE '\\'
             </if>
             <if test="query.action != null">
                 AND admin_log.action = #{query.action}
@@ -42,8 +45,7 @@
     <!-- 作用：读取管理员审计页；账号识别字段仅来自users，不读取用户业务表。 -->
     <select id="selectAuditLogPage" resultType="com.hyf.agent_work_foot.admin.mapper.AdminAuditMapper$AdminAuditLogRow">
         SELECT admin_log.id,
-               admin_log.admin_user_id AS adminUserId,
-               admin_user.email AS adminEmail,
+               admin_user.admin_login_name AS adminAccount,
                admin_user.nickname AS adminNickname,
                admin_log.target_user_id AS targetUserId,
                target_user.email AS targetEmail,
@@ -65,6 +67,8 @@
     <select id="countAuditLogs" resultType="long">
         SELECT COUNT(*)
         FROM admin_audit_logs admin_log
+        LEFT JOIN users admin_user ON admin_user.id = admin_log.admin_user_id
+        LEFT JOIN users target_user ON target_user.id = admin_log.target_user_id
         <include refid="auditLogFilters"/>
     </select>
 </mapper>

@@ -91,7 +91,7 @@ public abstract class AbstractMySqlIntegrationTest {
 
     /**
      * 作用：创建可用于管理员自助改密测试的完整账号夹具。
-     * 输入：无。输出：ID、邮箱、原密码和Access Token。
+     * 输入：无。输出：ID、邮箱、管理员账号、原密码和Access Token。
      * 逻辑：仍通过生产AuthMapper和PasswordEncoder持久化，不绕过账号安全状态查询。
      */
     protected AdminAccount adminAccount() {
@@ -102,10 +102,12 @@ public abstract class AbstractMySqlIntegrationTest {
     private AdminAccount adminAccount(String role) {
         String id = UUID.randomUUID().toString();
         String email = "admin+" + UUID.randomUUID() + "@example.com";
+        String account = "admin_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String password = "Pass_123";
         authMapper.insertUser(new AuthMapper.UserRow(
                 id,
                 email,
+                account,
                 "测试管理员",
                 null,
                 role,
@@ -114,7 +116,7 @@ public abstract class AbstractMySqlIntegrationTest {
                 false,
                 0
         ), passwordEncoder.encode(password));
-        return new AdminAccount(id, email, password,
+        return new AdminAccount(id, email, account, password,
                 jwtService.issueAccessToken(id, role, 0));
     }
 
@@ -144,6 +146,6 @@ public abstract class AbstractMySqlIntegrationTest {
     }
 
     /** 集成测试管理员夹具，只在测试进程内传递登录资料。 */
-    protected record AdminAccount(String id, String email, String password, String accessToken) {
+    protected record AdminAccount(String id, String email, String account, String password, String accessToken) {
     }
 }

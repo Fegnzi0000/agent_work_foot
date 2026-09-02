@@ -3,15 +3,19 @@ package com.hyf.agent_work_foot.admin.mapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import org.apache.ibatis.annotations.Param;
 
 /** Admin用户数据访问接口，负责普通用户分页、账号行锁、状态、密码和角色更新。 */
 public interface AdminUserMapper {
-    /** 作用：分页查询普通用户。输入：MP分页、邮箱前缀和状态。输出：分页投影。逻辑：管理员列表永远只返回USER。 */
+    /** 作用：分页查询普通用户。输入：MP分页、邮箱、昵称、状态和注册时间范围。输出：分页投影。逻辑：管理员列表永远只返回USER。 */
     IPage<AdminUserRow> selectAdminUserPage(
             Page<AdminUserRow> page,
             @Param("emailPrefix") String emailPrefix,
-            @Param("status") String status
+            @Param("nicknameContains") String nicknameContains,
+            @Param("status") String status,
+            @Param("registeredStartAt") LocalDateTime registeredStartAt,
+            @Param("registeredEndExclusiveAt") LocalDateTime registeredEndExclusiveAt
     );
 
     /** 作用：按ID锁定管理目标。输入：用户ID。输出：账号状态或空。逻辑：状态修改和密码重置串行执行。 */
@@ -31,9 +35,13 @@ public interface AdminUserMapper {
     int resetPassword(@Param("userId") String userId, @Param("passwordHash") String passwordHash,
                       @Param("expectedVersion") int expectedVersion);
 
-    /** 作用：受控修改角色。输入：目标、角色ID和预期版本。输出：影响行数。逻辑：bootstrap提升时递增安全版本。 */
-    int updateRole(@Param("userId") String userId, @Param("roleId") String roleId,
-                   @Param("expectedVersion") int expectedVersion);
+    /** 作用：受控提升为管理员并设置登录名。输入：目标、角色、账号和预期版本。输出：影响行数。逻辑：角色和登录名同事务写入。 */
+    int promoteToAdmin(@Param("userId") String userId, @Param("roleId") String roleId,
+                       @Param("adminLoginName") String adminLoginName, @Param("expectedVersion") int expectedVersion);
+
+    /** 作用：为既有管理员变更登录名。输入：目标、账号和预期版本。输出：影响行数。逻辑：递增安全版本使旧会话失效。 */
+    int updateAdminLoginName(@Param("userId") String userId, @Param("adminLoginName") String adminLoginName,
+                             @Param("expectedVersion") int expectedVersion);
 
     /** 管理员分页用户投影。 */
     record AdminUserRow(
@@ -53,6 +61,7 @@ public interface AdminUserMapper {
     record LockedAdminUser(
             String id,
             String email,
+            String adminLoginName,
             String role,
             String status,
             int authVersion,

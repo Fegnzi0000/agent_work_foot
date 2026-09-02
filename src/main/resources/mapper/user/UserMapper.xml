@@ -13,6 +13,7 @@
     <select id="selectById" resultType="com.hyf.agent_work_foot.auth.mapper.AuthMapper$UserRow">
         SELECT u.id,
                u.email,
+               u.admin_login_name AS adminLoginName,
                u.nickname,
                u.avatar_object_key AS avatarObjectKey,
                r.code AS role,

@@ -21,7 +21,7 @@ public final class PreferenceRequests {
     /** 单个偏好输入：type 为 PRESET 或 CUSTOM，value 为预设编码或用户输入，label 仅供前端携带。 */
     public record PreferenceItem(
             @NotBlank String type,
-            @NotBlank @Size(max = 20) String value,
+            @NotBlank @Size(max = 64) String value,
             @Size(max = 20) String label
     ) {
     }

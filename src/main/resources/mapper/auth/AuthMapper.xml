@@ -23,9 +23,9 @@
     -->
     <insert id="insertUser">
         INSERT INTO users (
-            id, email, password_hash, nickname, role_id, status, onboarding_completed, must_change_password, auth_version
+            id, email, admin_login_name, password_hash, nickname, role_id, status, onboarding_completed, must_change_password, auth_version
         ) VALUES (
-            #{user.id}, #{user.email}, #{passwordHash}, #{user.nickname},
+            #{user.id}, #{user.email}, #{user.adminLoginName}, #{passwordHash}, #{user.nickname},
             (SELECT id FROM roles WHERE code = #{user.role} AND is_active = 1), #{user.status},
             #{user.onboardingCompleted}, #{user.mustChangePassword}, #{user.authVersion}
         )
@@ -50,6 +50,25 @@
         FROM users u
         JOIN roles r ON r.id = u.role_id AND r.is_active = 1
         WHERE u.email = #{email}
+        FOR UPDATE
+    </select>
+
+    <!-- 作用：按管理员账号读取登录校验资料；输入：标准化账号；输出：ADMIN用户或空。 -->
+    <select id="selectAdminByLoginName" resultType="com.hyf.agent_work_foot.auth.mapper.AuthMapper$UserWithPassword">
+        SELECT u.id,
+               u.email,
+               u.password_hash AS passwordHash,
+               u.nickname,
+               u.avatar_object_key AS avatarObjectKey,
+               r.code AS role,
+               u.status,
+               u.onboarding_completed AS onboardingCompleted,
+               u.must_change_password AS mustChangePassword,
+               u.auth_version AS authVersion
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        WHERE u.admin_login_name = #{adminLoginName}
+          AND r.code = 'ADMIN'
         FOR UPDATE
     </select>
 

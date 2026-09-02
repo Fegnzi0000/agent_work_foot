@@ -23,11 +23,11 @@ class AdminAuditLogServiceTest {
         AdminAuditLogService service = new AdminAuditLogService(new StubMapper(), new ObjectMapper(), clock);
 
         AdminResponses.AdminAuditLogPageData result = service.list(
-                null, null, "user_disabled", "success", null, null, 0, 20
+                null, null, null, "user_disabled", "success", null, null, 0, 20
         );
 
         assertEquals(1, result.items().size());
-        assertEquals("admin@example.com", result.items().getFirst().admin().email());
+        assertEquals("admin", result.items().getFirst().admin().account());
         assertEquals("ACTIVE", result.items().getFirst().detail().get("before"));
         assertEquals("DISABLED", result.items().getFirst().detail().get("after"));
         assertFalse(result.items().getFirst().detail().containsKey("password"));
@@ -39,11 +39,22 @@ class AdminAuditLogServiceTest {
         AdminAuditLogService service = new AdminAuditLogService(new StubMapper(), new ObjectMapper(), clock);
 
         assertEquals("VALIDATION_FAILED", assertThrows(ApiException.class,
-                () -> service.list("not-a-uuid", null, null, null, null, null, 0, 20)).code());
+                () -> service.list("bad!!", null, null, null, null, null, null, 0, 20)).code());
         assertEquals("VALIDATION_FAILED", assertThrows(ApiException.class,
-                () -> service.list(null, null, "unknown", null, null, null, 0, 20)).code());
+                () -> service.list(null, null, null, "unknown", null, null, null, 0, 20)).code());
         assertEquals("VALIDATION_FAILED", assertThrows(ApiException.class,
-                () -> service.list(null, null, null, null, LocalDate.of(2026, 8, 1), null, 0, 20)).code());
+                () -> service.list(null, null, null, null, null, LocalDate.of(2026, 8, 1), null, 0, 20)).code());
+    }
+
+    @Test
+    void acceptsPartialAdministratorAccountForFuzzySearch() {
+        AdminAuditLogService service = new AdminAuditLogService(new StubMapper(), new ObjectMapper(), clock);
+
+        AdminResponses.AdminAuditLogPageData result = service.list(
+                "ad", "example", "用户", null, null, null, null, 0, 20
+        );
+
+        assertEquals(1, result.items().size());
     }
 
     private static class StubMapper implements AdminAuditMapper {
@@ -59,7 +70,7 @@ class AdminAuditLogServiceTest {
         @Override
         public List<AdminAuditLogRow> selectAuditLogPage(AdminAuditLogQuery query) {
             return List.of(new AdminAuditLogRow(
-                    "audit-1", "00000000-0000-4000-8000-000000000001", "admin@example.com", "管理员",
+                    "audit-1", "admin", "管理员",
                     "00000000-0000-4000-8000-000000000002", "user@example.com", "用户",
                     "USER_DISABLED", "SUCCESS", "request-1",
                     "{\"before\":\"ACTIVE\",\"after\":\"DISABLED\",\"password\":\"forbidden\"}",

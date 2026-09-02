@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -45,13 +44,15 @@ public class AdminAuditLogService {
         this.clock = clock;
     }
 
-    public AdminResponses.AdminAuditLogPageData list(String adminUserId, String targetUserId, String action,
-                                                      String result, LocalDate startDate, LocalDate endDate,
+    public AdminResponses.AdminAuditLogPageData list(String adminAccount, String targetUserEmail,
+                                                      String targetUserNickname, String action, String result,
+                                                      LocalDate startDate, LocalDate endDate,
                                                       int page, int size) {
         DateRange range = resolveRange(startDate, endDate);
         validatePage(page, size);
         AdminAuditMapper.AdminAuditLogQuery query = new AdminAuditMapper.AdminAuditLogQuery(
-                normalizeUuid(adminUserId, "adminUserId"), normalizeUuid(targetUserId, "targetUserId"),
+                normalizeAdminAccount(adminAccount), normalizeSearchText(targetUserEmail, "targetUserEmail", 254),
+                normalizeSearchText(targetUserNickname, "targetUserNickname", 20),
                 normalizeEnum(action, ACTIONS, "action"), normalizeEnum(result, RESULTS, "result"),
                 utcDateTime(range.start()), utcDateTime(range.end().plusDays(1)), page * size, size
         );
@@ -63,9 +64,9 @@ public class AdminAuditLogService {
 
     private AdminResponses.AdminAuditLogData response(AdminAuditMapper.AdminAuditLogRow row) {
         return new AdminResponses.AdminAuditLogData(
-                row.id(), new AdminResponses.AuditAccountData(row.adminUserId(), row.adminEmail(), row.adminNickname()),
-                row.targetUserId() == null ? null : new AdminResponses.AuditAccountData(
-                        row.targetUserId(), row.targetEmail(), row.targetNickname()),
+                row.id(), new AdminResponses.AuditAdminData(row.adminAccount(), row.adminNickname()),
+                row.targetUserId() == null ? null : new AdminResponses.AuditTargetUserData(
+                        row.targetEmail(), row.targetNickname()),
                 row.action(), row.result(), row.requestId(), safeDetail(row.detailJson()), row.createdAt()
         );
     }
@@ -106,15 +107,31 @@ public class AdminAuditLogService {
         return new DateRange(start, end);
     }
 
-    private String normalizeUuid(String value, String field) {
+    private String normalizeAdminAccount(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        try {
-            return UUID.fromString(value.trim()).toString();
-        } catch (IllegalArgumentException exception) {
-            throw validation(field, "必须是UUID");
+        String account = value.trim();
+        if (account.length() > 32 || !account.matches("^[A-Za-z0-9_]+$")) {
+            throw validation("adminAccount", "管理员账号筛选仅允许字母、数字或下划线，且最长32位");
         }
+        return escapeLike(account.toLowerCase(Locale.ROOT));
+    }
+
+    private String normalizeSearchText(String value, String field, int maxLength) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw validation(field, "长度不能超过" + maxLength);
+        }
+        return escapeLike(normalized);
+    }
+
+    /** 作用：转义 LIKE 特殊字符。输入：用户输入文本。输出：可作为字面量模糊查询的文本。逻辑：不让%和_扩大检索范围。 */
+    private String escapeLike(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     private String normalizeEnum(String value, Set<String> allowed, String field) {

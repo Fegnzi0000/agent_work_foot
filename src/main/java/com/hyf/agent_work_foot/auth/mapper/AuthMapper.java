@@ -19,6 +19,9 @@ public interface AuthMapper {
     /** 作用：按邮箱读取登录所需资料。输入：已标准化邮箱。输出：用户与密码哈希，未找到时为 null。逻辑：仅供登录服务校验。 */
     UserWithPassword selectUserByEmail(@Param("email") String email);
 
+    /** 作用：按管理员登录名读取登录资料。输入：标准化账号名。输出：用户与密码哈希，未找到时为 null。逻辑：仅供管理员网页入口校验。 */
+    UserWithPassword selectAdminByLoginName(@Param("adminLoginName") String adminLoginName);
+
     /** 作用：更新成功登录时间。输入：用户 ID。输出：无。逻辑：只更新 last_login_at。 */
     void updateLastLogin(@Param("userId") String userId, @Param("loggedInAt") LocalDateTime loggedInAt);
 
@@ -38,7 +41,7 @@ public interface AuthMapper {
 
 
     /** 用户公开资料行，供注册、资料读取和认证响应转换复用。 */
-    record UserRow(String id, String email, String nickname, String avatarObjectKey, String role, String status,
+    record UserRow(String id, String email, String adminLoginName, String nickname, String avatarObjectKey, String role, String status,
                    boolean onboardingCompleted, boolean mustChangePassword, int authVersion) {
     }
 

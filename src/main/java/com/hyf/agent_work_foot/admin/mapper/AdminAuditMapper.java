@@ -35,8 +35,9 @@ public interface AdminAuditMapper {
 
     /** 审计查询条件；时间为UTC的左闭右开区间，offset为0基行偏移。 */
     record AdminAuditLogQuery(
-            String adminUserId,
-            String targetUserId,
+            String adminAccount,
+            String targetUserEmail,
+            String targetUserNickname,
             String action,
             String result,
             LocalDateTime startAt,
@@ -49,8 +50,7 @@ public interface AdminAuditMapper {
     /** 审计列表平面投影；账号字段可因历史账号不存在而为空。 */
     record AdminAuditLogRow(
             String id,
-            String adminUserId,
-            String adminEmail,
+            String adminAccount,
             String adminNickname,
             String targetUserId,
             String targetEmail,

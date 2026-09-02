@@ -20,6 +20,6 @@ public record AdminProperties(
     }
 
     /** 一次性ADMIN提升命令配置；默认关闭，不能作为HTTP功能使用。 */
-    public record Bootstrap(boolean enabled, String email) {
+    public record Bootstrap(boolean enabled, String email, String account) {
     }
 }

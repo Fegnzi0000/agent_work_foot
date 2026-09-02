@@ -30,6 +30,13 @@ public final class AuthRequests {
     ) {
     }
 
+    /** 管理员网页登录请求：独立管理员账号和密码，不接受邮箱。 */
+    public record AdminLoginRequest(
+            @NotBlank @Pattern(regexp = "^[A-Za-z][A-Za-z0-9_]{2,31}$") String account,
+            @NotBlank @Pattern(regexp = "^[A-Za-z0-9_]{6,20}$") String password
+    ) {
+    }
+
     /** 刷新或退出请求：携带非空的 Refresh Token 原文。 */
     public record RefreshTokenRequest(@NotBlank String refreshToken) {
     }

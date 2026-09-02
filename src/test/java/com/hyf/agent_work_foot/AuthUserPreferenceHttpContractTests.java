@@ -106,7 +106,9 @@ class AuthUserPreferenceHttpContractTests extends AbstractMySqlIntegrationTest {
                 "budgetEnabled", true,
                 "dailyBudget", "30",
                 "medicalAllergies", List.of(Map.of("type", "PRESET", "value", "ALLERGY_EGG")),
-                "dietaryRestrictions", List.of(),
+                "dietaryRestrictions", List.of(Map.of(
+                        "type", "PRESET", "value", "RESTRICTION_VEGETARIAN"
+                )),
                 "dislikes", List.of(),
                 "tastePreferences", List.of(Map.of("type", "CUSTOM", "value", "微辣"))
         );

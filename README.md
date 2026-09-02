@@ -1,218 +1,190 @@
 # AI 干饭搭子后端
 
-面向微信小程序的饮食记录、食物池和随机推荐后端。当前按**模块化单体**部署：一个 Spring Boot 应用、一个 MySQL 数据库；不使用微服务、消息队列、Redis 或 Agent/AI 服务。
+面向微信小程序用户端和网页管理员端的后端服务。当前项目以单体应用方式运行：小程序与管理网页共用同一套后端、数据库和认证体系，但接口权限与业务边界相互隔离。
 
-## 已实现功能
+## 当前范围
 
-- 认证与账号：邮箱注册/登录、JWT Access Token、Refresh Token 轮换、退出、改密、注销、请求 ID 和可配置内存限流。
-- 用户与偏好：首次引导、昵称、预算历史、预设与自定义饮食偏好。
-- 食物池：默认食物初始化、分页筛选、新增、修改、标签、软删除和重复保护。
-- 饮食记录：从食物池或手动输入创建记录、可选加入食物池、历史查询、修改、软删除和消费统计。
-- 老虎机：基于当前有效食物池等概率抽取、结果快照、5 分钟有效期、重转、幂等确认并生成饮食记录。
-- 管理端：数据库 RBAC、用户查询、启用/禁用、一次性临时密码和审计日志；`ADMIN` 仅管理普通用户，`SUPER_ADMIN` 可管理其他管理员。
+| 端 | 当前职责 |
+| --- | --- |
+| 微信小程序用户端 | 注册登录、用户资料、饮食记录、转盘、统计等用户功能。 |
+| 网页管理员端 | 管理员登录、数据看板、用户查询与状态管理、管理员操作审计。 |
 
-所有金额在 HTTP 请求和响应中都是十进制字符串，响应固定两位小数，例如 `"18.50"`。后端业务计算使用 `BigDecimal`，MySQL 使用 `DECIMAL`。
+管理员端当前只管理普通用户数据，不提供管理员账号的网页管理功能。
+
+## 权限模型
+
+项目采用两级角色语义：
+
+- `USER`：普通小程序用户。
+- `ADMIN`：网页管理员，可访问 `/api/v1/admin/**` 接口并管理普通用户。
+
+不再使用 `SUPER_ADMIN` 或多层级 RBAC。对于当前两人开发、管理员数量较少的阶段，这样更直接，也避免了尚无实际需求的角色和权限配置复杂度。
+
+## 已实现的管理员功能
+
+- 管理员邮箱密码登录、JWT 鉴权和退出登录。
+- 管理首页统计：用户、饮食记录、转盘记录、近七日趋势等。
+- 用户列表：按邮箱、昵称、用户状态、注册日期范围筛选并分页。
+- 用户详情与用户状态更新。
+- 管理员操作审计查询。
+- 开发环境跨域白名单：默认只允许 `http://localhost:5173` 的管理网页访问。
+
+接口字段、请求示例和前端使用约定以 `E:\work\gpt_work\前端开发说明.md` 为准。
 
 ## 技术栈
 
-| 范围 | 方案 |
-| --- | --- |
-| 运行时 | Java 25、Spring Boot 4.1、Maven |
-| Web 与校验 | Spring MVC、Spring Validation、Jackson |
-| 安全 | Spring Security、Nimbus JOSE、HS256 JWT、Refresh Token 哈希与轮换 |
-| 数据访问 | MyBatis-Plus 3.5.17、Mapper XML、MySQL Connector/J |
-| 数据库迁移 | Flyway、MySQL 8.4 |
-| 测试 | JUnit 5、Spring MVC Test、Testcontainers MySQL 8.4 |
-| 运维 | Spring Boot Actuator、Docker |
+- Java 25
+- Spring Boot 4.1、Spring Security
+- MyBatis-Plus、MyBatis XML
+- MySQL 8.4
+- Flyway（数据库结构迁移）
+- JWT（管理员与用户认证）
+- Maven
 
-## 架构与模块
+## 数据库与迁移
 
-```text
-微信小程序 / 管理员前端
-        │ HTTPS / JSON
-        ▼
-Controller → Service → Mapper → MySQL 8.4
-                  │
-                  ├─ Spring Security + JWT + RBAC
-                  ├─ Flyway
-                  ├─ 限流、统一异常、requestId
-                  └─ Actuator
-```
-
-每个业务模块均遵循 `Controller → Service → Mapper`：
-
-| 模块 | 职责 |
-| --- | --- |
-| `common` | 统一响应、异常、字段错误、requestId、金额字符串处理 |
-| `config` | Security、Jackson、MyBatis-Plus、时钟、环境属性 |
-| `auth` | 注册、登录、JWT、Refresh Token 与认证限流 |
-| `user` | 当前用户资料、改密、注销 |
-| `preference` | 引导、预算历史、偏好预设和用户偏好 |
-| `food` | 默认食物模板、用户食物池、标签和软删除 |
-| `diet` | 饮食记录快照、历史查询和统计 |
-| `slot` | 随机抽取、Spin 生命周期与幂等确认 |
-| `rbac` | 角色、权限及认证主体权限解析 |
-| `admin` | 管理员用户操作、临时密码、审计、一次性管理员提升 |
-
-Mapper 只负责数据访问。单表操作优先使用 `Entity + BaseMapper`；分页、标签 AND 筛选、行锁、统计等复杂查询位于 Mapper XML；全部参数使用 `#{...}` 预编译绑定，禁止 `${...}`。
-
-## 关键数据流
-
-### 认证与用户归属
+数据库结构仅由 Flyway 管理，迁移文件位于：
 
 ```text
-注册/登录 → 签发 Access JWT + Refresh Token
-          → Security Filter 校验 JWT、加载角色权限
-          → Security Context 中取得当前用户 ID
-          → Controller/Service 仅操作该用户归属的数据
+src/main/resources/db/migration
 ```
 
-客户端不传入可决定数据归属的 `userId`。Access Token 使用 `kid` 支持当前密钥与上一把密钥平滑轮换；Refresh Token 仅保存 SHA-256 摘要，刷新时撤销旧令牌并创建新令牌。
-
-### 注册初始化
+当前迁移为：
 
 ```text
-创建 users
-  → 复制 food_default_templates 到 food_options / food_option_tags
-  → 创建 refresh_tokens
-  → 返回 ONBOARDING
+V1__initial_schema.sql
+V2__add_admin_login_name.sql
 ```
 
-以上步骤由认证服务的同一事务提交或回滚。
+本地开发处于可重新初始化阶段时，可以清空现有表后重新启动服务，让 Flyway 按顺序执行迁移创建完整结构。之后发生任何真实的表结构或初始数据变更，都必须新增新的版本文件，不能修改已经在其他环境执行过的迁移。
 
-### 食物、记录与老虎机
-
-```text
-Food 管理 → food_options + food_option_tags
-                 │
-Diet 手工/选池 ───┼→ diet_records（名称、分类、标签、金额全部保存快照）
-                 │
-Slot 抽取 ───────┴→ slot_spins（食物快照）
-Slot 确认 → 同一事务创建 source=SLOT 的 diet_records 并标记 CONFIRMED
-```
-
-历史记录只读取 `diet_records` 快照，不因食物池后续修改或删除而变化。食物和记录均为软删除；统计只聚合未删除的饮食记录。老虎机确认使用行锁和 `confirmed_diet_record_id` 保证幂等。
-
-## 物理数据模型
-
-Flyway 在空库上按顺序执行 `V1`、`V2`、`V3`：
-
-| 领域 | 表 |
-| --- | --- |
-| 用户与会话 | `users`、`refresh_tokens`、`temporary_passwords` |
-| 管理审计 | `admin_audit_logs` |
-| 偏好与预算 | `preference_presets`、`preference_items`、`user_budget_histories` |
-| 食物池 | `food_default_templates`、`food_options`、`food_option_tags` |
-| 饮食与随机 | `diet_records`、`slot_spins` |
-| RBAC | `roles`、`permissions`、`role_permissions` |
-
-主键使用应用层生成的 UUID 字符串。时间以 UTC `DATETIME(3)` 持久化；饮食记录另存按 `Asia/Shanghai` 计算的 `business_date`。数据库结构的唯一来源是 [db/migration](src/main/resources/db/migration)。
-
-## 本地部署
+## 本地启动
 
 ### 前置条件
 
 - JDK 25
 - Maven 3.9+
-- Docker Desktop
-- 可用的 MySQL 8.4 容器
+- MySQL 8.4（可使用本机安装的 MySQL；Docker 仅在运行集成测试时需要）
+- 已创建本地数据库并完成连接配置
 
-### 启动本地 MySQL
+开发环境配置在 `src/main/resources/application-dev.yaml`。默认数据库连接为本机 MySQL 的 `3307` 端口；如本机配置不同，请按实际情况调整本地配置，不要提交账号密码。
 
-PowerShell：
-
-```powershell
-docker run --name agent-work-foot-mysql `
-  --restart unless-stopped `
-  -e MYSQL_ROOT_PASSWORD=RootLocal_2026 `
-  -e MYSQL_DATABASE=agent_work_foot `
-  -e MYSQL_USER=agent_app `
-  -e MYSQL_PASSWORD=AgentLocal_2026 `
-  -p 3307:3306 `
-  -v agent-work-foot-mysql-data:/var/lib/mysql `
-  -d mysql:8.4 `
-  --character-set-server=utf8mb4 `
-  --collation-server=utf8mb4_0900_ai_ci
-```
-
-项目的 `application-dev.yaml` 默认连接 `localhost:3307`。启动应用时 Flyway 会自动创建空库的结构和预设数据：
+PowerShell 示例：
 
 ```powershell
-$env:JAVA_HOME = 'E:\java-jdk25-temurin'
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-```
-
-服务默认地址为 `http://127.0.0.1:8080`，接口前缀为 `/api/v1`，健康检查为 `GET /actuator/health`。
-
-### 生产部署
-
-生产环境不提交数据库账号、密码或 JWT 密钥。设置以下环境变量后，以 `prod` Profile 启动：
-
-```text
-SPRING_PROFILES_ACTIVE=prod
-AGENT_WORK_FOOT_DB_URL=jdbc:mysql://<host>:3306/<database>?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
-AGENT_WORK_FOOT_DB_USERNAME=<database-user>
-AGENT_WORK_FOOT_DB_PASSWORD=<database-password>
-AGENT_WORK_FOOT_JWT_ACTIVE_KEY_ID=<active-key-id>
-AGENT_WORK_FOOT_JWT_ACTIVE_SECRET=<long-random-secret>
-AGENT_WORK_FOOT_JWT_PREVIOUS_KEY_ID=<previous-key-id-or-empty>
-AGENT_WORK_FOOT_JWT_PREVIOUS_SECRET=<previous-secret-or-empty>
-```
-
-生产必须使用 HTTPS，并在微信公众平台配置对应的合法请求域名；不要把开发环境的数据库密码或 JWT 密钥用于生产。
-
-构建并运行生产 Jar：
-
-```powershell
-mvn clean package
-java -jar target/agent_work_foot-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
-```
-
-## 测试账号与管理员账号
-
-数据库迁移**不会写入任何可登录的用户或管理员账号**，也不保存明文密码。因此不存在可以从仓库安全提供的“默认管理员密码”。下面是一套可重复使用的本地测试约定：
-
-| 身份 | 邮箱 | 密码 | 创建方式 |
-| --- | --- | --- | --- |
-| 普通测试用户 | `test.user@example.com` | `Testuser_2026` | 调用注册接口或在小程序注册 |
-| 管理员测试用户 | `test.admin@example.com` | `Testadmin_2026` | 先按普通用户注册，再执行下方提升命令 |
-
-上述是**建议的本地测试凭据，不是预置账号**。首次使用必须注册；请勿在生产环境使用。
-
-将已注册的管理员测试用户提升为 `SUPER_ADMIN`：
-
-```powershell
-$env:SPRING_PROFILES_ACTIVE = 'dev,bootstrap-admin'
-$env:APP_ADMIN_BOOTSTRAP_EMAIL = 'test.admin@example.com'
-$env:APP_ADMIN_BOOTSTRAP_ROLE = 'SUPER_ADMIN'
+$taskJavaHome = 'E:\java-jdk25-temurin'
+$env:JAVA_HOME = $taskJavaHome
+$env:Path = "$taskJavaHome\bin;$env:Path"
+Set-Location E:\work_java\agent_work_foot\agent_work_foot
 mvn spring-boot:run
 ```
 
-该命令不启动 HTTP 服务，完成提升后会自动退出；只允许把已注册且状态为 `ACTIVE` 的 `USER` 提升为 `ADMIN` 或 `SUPER_ADMIN`。提升会撤销该用户已有 Refresh Token，随后请重新登录。
+默认服务地址：
 
-## 测试
-
-```powershell
-$env:JAVA_HOME = 'E:\java-jdk25-temurin'
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-mvn test
+```text
+http://127.0.0.1:8080
 ```
 
-测试使用 Testcontainers 启动隔离的 MySQL 8.4，并验证 Flyway、Mapper、认证、权限、食物池、饮食记录和老虎机 HTTP 契约。运行完整测试前需确保 Docker Desktop 的 daemon 对当前终端可访问。
+健康检查：
 
-仅编译主代码和测试代码：
+```text
+GET /actuator/health
+```
+
+### 管理网页联调
+
+管理网页项目位于：
+
+```text
+E:\work\gpt_work\front\admin
+```
+
+启动前端真实接口模式：
+
+```powershell
+Set-Location E:\work\gpt_work\front\admin
+npm.cmd run dev:api
+```
+
+然后通过以下地址访问：
+
+```text
+http://localhost:5173
+```
+
+注意前端应使用 `localhost`，不要改成 `127.0.0.1:5173`。浏览器跨域规则将两者视为不同来源；当前后端开发环境白名单只放行 `http://localhost:5173`。
+
+## 开发环境 SQL 日志
+
+`dev` Profile 已启用 MyBatis SQL 诊断日志。每次 Mapper 查询或更新会记录：
+
+- Mapper 方法标识；
+- 归一化后的 SQL；
+- 参数摘要；
+- 查询行数或更新影响行数；
+- 执行耗时与异常类型。
+
+密码、令牌、授权信息等敏感字段会在摘要中脱敏。该诊断拦截器仅在 `dev` 环境加载，测试和生产环境不会输出这类详细日志。
+
+## 本地联调数据
+
+本地已准备过管理员和演示用户数据时，可使用：
+
+| 类型 | 账号 | 密码 | 说明 |
+| --- | --- | --- | --- |
+| 管理员 | `admin` | `123456` | 网页管理员账号；关联邮箱为 `admin@local.test`，仅限本地开发数据库。 |
+| 演示用户 | `demo.user01@local.test` 至 `demo.user12@local.test` | `User_123` | 包含正常、禁用、注销等状态及关联业务数据。 |
+
+这些账号不是 Flyway 的固定种子数据；重新清空数据库并执行 V1 后，需要按本地联调数据脚本或说明重新写入。完整数据范围和 SQL 见：
+
+```text
+E:\work\gpt_work\管理员网页本地联调数据.md
+```
+
+## 将已有用户提升为管理员
+
+管理员账号不提供公开注册入口。先通过正常注册流程创建用户，再在本地使用一次性引导 Profile 将指定邮箱提升为 `ADMIN`：
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE = 'dev,bootstrap-admin'
+$env:APP_ADMIN_BOOTSTRAP_EMAIL = '已注册用户邮箱'
+$env:APP_ADMIN_BOOTSTRAP_ACCOUNT = '管理员登录账号'
+mvn spring-boot:run
+```
+
+该 Profile 以非 Web 方式运行，完成提升后会退出。管理员账号为 3 至 32 位字母、数字或下划线，且以字母开头；它不接受角色参数。
+
+生产环境应通过受控运维流程执行，不应暴露为普通 HTTP 接口。
+
+## 生产环境要点
+
+- 使用 `prod` Profile，并通过环境变量提供数据库连接和 JWT 密钥。
+- 必填数据库变量：`AGENT_WORK_FOOT_DB_URL`、`AGENT_WORK_FOOT_DB_USERNAME`、`AGENT_WORK_FOOT_DB_PASSWORD`。
+- 必填 JWT 变量：`APP_AUTH_JWT_ACTIVE_KEY_ID`、`APP_AUTH_JWT_ACTIVE_SECRET`。
+- 将 CORS 白名单改为实际管理网页域名，不使用 `*` 通配符。
+- 保持 Flyway 启用，并让 Hibernate 只校验结构，不自动建表或改表。
+
+## 验证与测试
+
+仅检查编译：
 
 ```powershell
 mvn test -DskipTests
 ```
 
-## 相关文档
+运行完整测试：
 
-产品、接口和数据库文档与本工程分开维护在工作区的 `E:\work\gpt_work`：
+```powershell
+mvn test
+```
 
-- `PRD.md`：产品需求。
-- `docs/openapi.yaml`：机器可读接口契约。
-- `docs/API.md`：前后端联调说明。
-- `database.md`：字段与表设计说明。
-- `开发日志.md`：阶段记录与后续规划。
+完整测试包含 Testcontainers 集成测试，需要本机 Docker 已启动；未启动 Docker 时相关测试无法执行，这是测试环境条件，不代表应用无法启动。
+
+## 交接文档
+
+项目开发与联调说明集中在 `E:\work\gpt_work`，避免混入后端源码目录：
+
+- `E:\work\gpt_work\前端开发说明.md`：前端接口、字段和联调约定。
+- `E:\work\gpt_work\后端开发说明.md`：后端架构、实现方案、配置和开发约定。
+- `E:\work\gpt_work\开发进度.md`：当前已完成内容、待办与后续阶段。
+- `E:\work\gpt_work\管理员网页本地联调数据.md`：管理员网页本地演示数据说明。

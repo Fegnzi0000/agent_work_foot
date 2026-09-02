@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- Admin用户查询和高风险条件更新；所有变量使用#{...}预编译绑定。 -->
 <mapper namespace="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper">
-    <!-- 作用：分页查询普通用户；输入：邮箱前缀和状态；输出：最小用户投影。 -->
+    <!-- 作用：分页查询普通用户；输入：邮箱、昵称、状态和注册范围；输出：最小用户投影。 -->
     <select id="selectAdminUserPage" resultType="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper$AdminUserRow">
         SELECT u.id,
                u.email,
@@ -19,8 +19,17 @@
         <if test="emailPrefix != null and emailPrefix != ''">
             AND u.email LIKE CONCAT(#{emailPrefix}, '%') ESCAPE '\\'
         </if>
+        <if test="nicknameContains != null and nicknameContains != ''">
+            AND u.nickname LIKE CONCAT('%', #{nicknameContains}, '%') ESCAPE '\\'
+        </if>
         <if test="status != null and status != ''">
             AND u.status = #{status}
+        </if>
+        <if test="registeredStartAt != null">
+            AND u.created_at &gt;= #{registeredStartAt}
+        </if>
+        <if test="registeredEndExclusiveAt != null">
+            AND u.created_at &lt; #{registeredEndExclusiveAt}
         </if>
         ORDER BY u.created_at DESC, u.id DESC
     </select>
@@ -45,6 +54,7 @@
     <select id="selectForUpdate" resultType="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper$LockedAdminUser">
         SELECT u.id,
                u.email,
+               u.admin_login_name AS adminLoginName,
                r.code AS role,
                u.status,
                u.auth_version AS authVersion,
@@ -59,6 +69,7 @@
     <select id="selectByEmailForUpdate" resultType="com.hyf.agent_work_foot.admin.mapper.AdminUserMapper$LockedAdminUser">
         SELECT u.id,
                u.email,
+               u.admin_login_name AS adminLoginName,
                r.code AS role,
                u.status,
                u.auth_version AS authVersion,
@@ -90,10 +101,21 @@
           AND status = 'ACTIVE'
     </update>
 
-    <!-- 作用：受控提升角色并使旧JWT失效；输入：用户、角色、版本；输出：影响行数。 -->
-    <update id="updateRole">
+    <!-- 作用：受控提升角色并设置管理员账号；输入：用户、角色、账号、版本；输出：影响行数。 -->
+    <update id="promoteToAdmin">
         UPDATE users
         SET role_id = #{roleId},
+            admin_login_name = #{adminLoginName},
+            auth_version = auth_version + 1
+        WHERE id = #{userId}
+          AND auth_version = #{expectedVersion}
+          AND status = 'ACTIVE'
+    </update>
+
+    <!-- 作用：更新既有管理员账号并使旧JWT失效；输入：用户、账号、版本；输出：影响行数。 -->
+    <update id="updateAdminLoginName">
+        UPDATE users
+        SET admin_login_name = #{adminLoginName},
             auth_version = auth_version + 1
         WHERE id = #{userId}
           AND auth_version = #{expectedVersion}

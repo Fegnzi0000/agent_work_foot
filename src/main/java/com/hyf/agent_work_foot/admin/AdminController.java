@@ -3,6 +3,7 @@ package com.hyf.agent_work_foot.admin;
 import com.hyf.agent_work_foot.common.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,12 +35,16 @@ public class AdminController {
     public ApiResponse<AdminResponses.AdminUserPageData> list(
             Authentication authentication,
             @RequestParam(required = false) String email,
+            @RequestParam(required = false) String nickname,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) LocalDate registeredStartDate,
+            @RequestParam(required = false) LocalDate registeredEndDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         return ApiResponse.ok(
-                service.list(authentication.getName(), email, status, page, size), "获取成功"
+                service.list(authentication.getName(), email, nickname, status,
+                        registeredStartDate, registeredEndDate, page, size), "获取成功"
         );
     }
 

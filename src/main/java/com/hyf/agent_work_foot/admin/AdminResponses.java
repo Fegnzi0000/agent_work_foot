@@ -38,15 +38,19 @@ public final class AdminResponses {
     public record TemporaryPasswordData(String temporaryPassword, Instant expiresAt) {
     }
 
-    /** 审计记录中的最小账号标识，不包含角色、状态及用户业务数据。 */
-    public record AuditAccountData(String id, String email, String nickname) {
+    /** 审计记录中的管理员识别信息，不返回内部UUID、邮箱或用户业务数据。 */
+    public record AuditAdminData(String account, String nickname) {
+    }
+
+    /** 审计记录中的目标用户识别信息，不返回内部UUID或用户业务数据。 */
+    public record AuditTargetUserData(String email, String nickname) {
     }
 
     /** 管理员审计列表项；detail只含后端白名单字段。 */
     public record AdminAuditLogData(
             String id,
-            AuditAccountData admin,
-            AuditAccountData targetUser,
+            AuditAdminData admin,
+            AuditTargetUserData targetUser,
             String action,
             String result,
             String requestId,

@@ -48,7 +48,8 @@ class AdminHttpContractTests extends AbstractMySqlIntegrationTest {
                 null, user.path("accessToken").asText()).getResponse().getStatus());
         assertEquals(403, perform(MockMvcRequestBuilders.get("/api/v1/food-options"),
                 null, admin.accessToken()).getResponse().getStatus());
-        assertEquals("ADMIN_HOME", json(login(admin.email(), admin.password()))
+        assertEquals(401, login(admin.email(), admin.password()).getResponse().getStatus());
+        assertEquals("ADMIN_HOME", json(adminLogin(admin.account(), admin.password()))
                 .path("data").path("nextStep").asText());
 
         JsonNode adminPage = json(perform(MockMvcRequestBuilders.get("/api/v1/admin/users"),
@@ -169,11 +170,12 @@ class AdminHttpContractTests extends AbstractMySqlIntegrationTest {
         String userId = user.path("user").path("id").asText();
         String email = user.path("user").path("email").asText();
         String oldAccess = user.path("accessToken").asText();
-        assertEquals(userId, bootstrapService.promote(email));
-        assertEquals(userId, bootstrapService.promote(email));
+        String account = "bootstrapadmin" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        assertEquals(userId, bootstrapService.promote(email, account));
+        assertEquals(userId, bootstrapService.promote(email, account));
         assertEquals(401, perform(MockMvcRequestBuilders.get("/api/v1/users/me"), null, oldAccess)
                 .getResponse().getStatus());
-        JsonNode loggedIn = json(login(email, "Pass_123")).path("data");
+        JsonNode loggedIn = json(adminLogin(account, "Pass_123")).path("data");
         assertEquals("ADMIN", loggedIn.path("user").path("role").asText());
         assertEquals("ADMIN_HOME", loggedIn.path("nextStep").asText());
     }
@@ -224,6 +226,12 @@ class AdminHttpContractTests extends AbstractMySqlIntegrationTest {
     private MvcResult login(String email, String password) throws Exception {
         return perform(MockMvcRequestBuilders.post("/api/v1/auth/login"),
                 Map.of("email", email, "password", password), null);
+    }
+
+    /** 作用：提交管理员账号登录请求。输入：管理员账号和密码。输出：MVC结果。逻辑：管理员端不使用邮箱登录。 */
+    private MvcResult adminLogin(String account, String password) throws Exception {
+        return perform(MockMvcRequestBuilders.post("/api/v1/admin/auth/login"),
+                Map.of("account", account, "password", password), null);
     }
 
     /** 作用：并发执行一次临时密码登录。输入：凭据和并发栅栏。输出：OK或错误码。逻辑：调用Spring事务代理而非私有实现。 */

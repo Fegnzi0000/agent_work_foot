@@ -11,7 +11,9 @@ import com.hyf.agent_work_foot.common.AppConstants;
 import com.hyf.agent_work_foot.config.AdminProperties;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
@@ -25,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 /** Admin应用服务，编排用户查询、状态转换、临时密码、会话失效和审计事务。 */
 @Service
 public class AdminService {
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final int MAX_REGISTERED_DATE_RANGE_DAYS = 90;
     private final AdminUserMapper userMapper;
     private final TemporaryPasswordMapper temporaryPasswordMapper;
     private final AccountSecurityMapper accountSecurityMapper;
@@ -62,15 +66,21 @@ public class AdminService {
     public AdminResponses.AdminUserPageData list(
             String adminUserId,
             String email,
+            String nickname,
             String status,
+            LocalDate registeredStartDate,
+            LocalDate registeredEndDate,
             int page,
             int size
     ) {
         validatePage(page, size);
         String normalizedStatus = normalizeStatus(status);
         String emailPrefix = normalizeEmailPrefix(email);
+        String nicknameContains = normalizeNicknameContains(nickname);
+        RegisteredDateRange registeredDateRange = resolveRegisteredDateRange(registeredStartDate, registeredEndDate);
         IPage<AdminUserMapper.AdminUserRow> result = userMapper.selectAdminUserPage(
-                new Page<>(page + 1L, size), emailPrefix, normalizedStatus
+                new Page<>(page + 1L, size), emailPrefix, nicknameContains, normalizedStatus,
+                registeredDateRange.startAt(), registeredDateRange.endExclusiveAt()
         );
         List<AdminResponses.AdminUserData> items = result.getRecords().stream().map(this::response).toList();
         return new AdminResponses.AdminUserPageData(
@@ -240,8 +250,40 @@ public class AdminService {
         return normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
+    /** 作用：规范化并转义昵称包含筛选。输入：可空搜索文本。输出：LIKE模式内容或null。逻辑：昵称最多20字符，LIKE元字符视为普通字符。 */
+    private String normalizeNicknameContains(String nickname) {
+        if (nickname == null || nickname.isBlank()) {
+            return null;
+        }
+        String normalized = nickname.trim();
+        if (normalized.length() > 20) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "昵称搜索内容过长");
+        }
+        return normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    /** 作用：把上海自然日注册范围转换为UTC半开区间。输入：起止日期。输出：查询边界。逻辑：必须成对传入，最多90天。 */
+    private RegisteredDateRange resolveRegisteredDateRange(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null && endDate == null) {
+            return new RegisteredDateRange(null, null);
+        }
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)
+                || startDate.plusDays(MAX_REGISTERED_DATE_RANGE_DAYS - 1L).isBefore(endDate)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "注册日期范围不合法");
+        }
+        return new RegisteredDateRange(utcDateTime(startDate), utcDateTime(endDate.plusDays(1)));
+    }
+
+    private LocalDateTime utcDateTime(LocalDate date) {
+        Instant instant = date.atStartOfDay(BUSINESS_ZONE).toInstant();
+        return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
+    }
+
     /** 作用：获取UTC数据库时间。输入：无。输出：LocalDateTime。逻辑：所有安全时间来自可注入Clock。 */
     private LocalDateTime utcNow() {
         return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+    }
+
+    private record RegisteredDateRange(LocalDateTime startAt, LocalDateTime endExclusiveAt) {
     }
 }

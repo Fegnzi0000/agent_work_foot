@@ -22,8 +22,9 @@ public class AdminAuditLogController {
     @GetMapping("/audit-logs")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<AdminResponses.AdminAuditLogPageData> list(
-            @RequestParam(required = false) String adminUserId,
-            @RequestParam(required = false) String targetUserId,
+            @RequestParam(required = false) String adminAccount,
+            @RequestParam(required = false) String targetUserEmail,
+            @RequestParam(required = false) String targetUserNickname,
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String result,
             @RequestParam(required = false) LocalDate startDate,
@@ -31,7 +32,7 @@ public class AdminAuditLogController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return ApiResponse.ok(service.list(adminUserId, targetUserId, action, result, startDate, endDate, page, size),
+        return ApiResponse.ok(service.list(adminAccount, targetUserEmail, targetUserNickname, action, result, startDate, endDate, page, size),
                 "获取成功");
     }
 }

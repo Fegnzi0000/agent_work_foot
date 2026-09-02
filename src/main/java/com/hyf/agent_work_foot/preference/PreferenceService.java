@@ -146,6 +146,9 @@ public class PreferenceService {
                 if (value.isEmpty()) {
                     throw validation("自定义偏好不能为空");
                 }
+                if (value.length() > 20) {
+                    throw validation("自定义偏好最多20个字符");
+                }
                 mapper.insertItem(new PreferenceMapper.StoredItem(
                         UUID.randomUUID().toString(), userId, kind, AppConstants.PREFERENCE_CUSTOM,
                         null, value, value.toLowerCase(Locale.ROOT)

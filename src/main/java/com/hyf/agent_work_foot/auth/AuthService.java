@@ -81,6 +81,7 @@ public class AuthService {
         AuthMapper.UserRow user = new AuthMapper.UserRow(
                 UUID.randomUUID().toString(),
                 email,
+                null,
                 "干饭用户" + UUID.randomUUID().toString().substring(0, 8),
                 null,
                 AppConstants.ROLE_USER,
@@ -103,17 +104,32 @@ public class AuthService {
     @Transactional
     public AuthResponses.AuthData login(AuthRequests.LoginRequest request) {
         AuthMapper.UserWithPassword found = mapper.selectUserByEmail(normalizeEmail(request.email()));
-        if (found == null
-                || !AppConstants.USER_STATUS_ACTIVE.equals(found.status())
+        if (found != null && AppConstants.ROLE_ADMIN.equals(found.role())) {
+            throw unauthorized();
+        }
+        return authenticate(found, request.password());
+    }
+
+    /** 管理员网页专用登录：仅按管理员账号名匹配，且查询结果必须为 ADMIN。 */
+    @Transactional
+    public AuthResponses.AuthData loginAdmin(AuthRequests.AdminLoginRequest request) {
+        AuthMapper.UserWithPassword found = mapper.selectAdminByLoginName(normalizeAdminLoginName(request.account()));
+        return authenticate(found, request.password());
+    }
+
+    /** 作用：校验已按入口定位的用户并签发会话。输入：可空用户、密码。输出：认证响应。逻辑：统一处理状态、正式/临时密码与登录时间。 */
+    private AuthResponses.AuthData authenticate(AuthMapper.UserWithPassword found, String password) {
+        if (found == null || !AppConstants.USER_STATUS_ACTIVE.equals(found.status())
                 || !temporaryCredentialService.authenticate(
-                        found.id(), found.passwordHash(), found.mustChangePassword(), request.password()
-                )) {
+                found.id(), found.passwordHash(), found.mustChangePassword(), password
+        )) {
             throw unauthorized();
         }
         mapper.updateLastLogin(found.id(), utcNow());
         AuthMapper.UserRow user = new AuthMapper.UserRow(
                 found.id(),
                 found.email(),
+                null,
                 found.nickname(),
                 found.avatarObjectKey(),
                 found.role(),
@@ -220,6 +236,11 @@ public class AuthService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
+    /** 管理员账号按小写存储和比较，避免大小写导致同一账号出现两种登录结果。 */
+    private String normalizeAdminLoginName(String account) {
+        return account.trim().toLowerCase(Locale.ROOT);
+    }
+
     /** 作用：计算敏感 Token 的 SHA-256 摘要。输入：原文。输出：十六进制摘要。逻辑：数据库只保存摘要，算法不可用时中止流程。 */
     private String hash(String value) {
         try {
@@ -233,7 +254,7 @@ public class AuthService {
 
     /** 作用：创建统一登录凭据失败异常。输入：无。输出：AUTH_INVALID_CREDENTIALS 异常。逻辑：不暴露账号、密码或 Token 的具体失败原因。 */
     private ApiException unauthorized() {
-        return new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS", "邮箱或密码错误");
+        return new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS", "账号或密码错误");
     }
 
     /** 作用：创建统一Token失败异常。输入：无。输出：AUTH_TOKEN_INVALID异常。逻辑：刷新和退出不复用登录凭据错误。 */
