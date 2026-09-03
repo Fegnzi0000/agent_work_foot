@@ -1,6 +1,7 @@
 package com.hyf.agent_work_foot.auth;
 
 import com.hyf.agent_work_foot.auth.mapper.AuthMapper;
+import com.hyf.agent_work_foot.auth.mapper.UserIdentityMapper;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.AppConstants;
 import com.hyf.agent_work_foot.config.AuthProperties;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String WECHAT_MINI_PROGRAM_PROVIDER = "WECHAT_MINI_PROGRAM";
 
     private final AuthMapper mapper;
     private final PasswordEncoder passwordEncoder;
@@ -37,6 +39,8 @@ public class AuthService {
     private final FoodInitializationService foodInitializationService;
     private final Clock clock;
     private final TemporaryCredentialService temporaryCredentialService;
+    private final UserIdentityMapper userIdentityMapper;
+    private final WeChatMiniProgramClient weChatMiniProgramClient;
 
     /**
      * 作用：注入认证流程依赖。
@@ -51,7 +55,9 @@ public class AuthService {
             AuthProperties properties,
             FoodInitializationService foodInitializationService,
             Clock clock,
-            TemporaryCredentialService temporaryCredentialService
+            TemporaryCredentialService temporaryCredentialService,
+            UserIdentityMapper userIdentityMapper,
+            WeChatMiniProgramClient weChatMiniProgramClient
     ) {
         this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
@@ -60,6 +66,8 @@ public class AuthService {
         this.foodInitializationService = foodInitializationService;
         this.clock = clock;
         this.temporaryCredentialService = temporaryCredentialService;
+        this.userIdentityMapper = userIdentityMapper;
+        this.weChatMiniProgramClient = weChatMiniProgramClient;
     }
 
     /**
@@ -117,16 +125,79 @@ public class AuthService {
         return authenticate(found, request.password());
     }
 
+    /**
+     * 作用：以微信小程序身份登录或创建新普通用户。
+     * 输入：wx.login 产生的一次性 code。输出：项目既有 JWT/Refresh Token 会话。
+     * 逻辑：后端先向微信换取 openid；已绑定则登录原账号，未绑定则创建无邮箱无密码的新用户及默认食物后绑定。
+     */
+    @Transactional
+    public AuthResponses.AuthData loginWithWeChatMiniProgram(String code) {
+        WeChatMiniProgramClient.WeChatIdentity weChat = weChatMiniProgramClient.exchangeCode(code);
+        UserIdentityMapper.IdentityRow identity = userIdentityMapper.selectForUpdate(
+                WECHAT_MINI_PROGRAM_PROVIDER, weChat.openId()
+        );
+        if (identity != null) {
+            return completeWeChatLogin(requiredUser(identity.userId()));
+        }
+
+        AuthMapper.UserRow user = new AuthMapper.UserRow(
+                UUID.randomUUID().toString(),
+                null,
+                null,
+                "干饭用户" + UUID.randomUUID().toString().substring(0, 8),
+                null,
+                AppConstants.ROLE_USER,
+                AppConstants.USER_STATUS_ACTIVE,
+                false,
+                false,
+                0
+        );
+        mapper.insertUser(user, null);
+        foodInitializationService.initializeDefaults(user.id());
+        insertWeChatIdentity(user.id(), weChat);
+        return completeWeChatLogin(user);
+    }
+
+    /**
+     * 作用：将已验证微信身份绑定到已有邮箱账号并登录原账号。
+     * 输入：微信 code、邮箱和密码。输出：原账号的 JWT/Refresh Token 会话。
+     * 逻辑：身份已绑定到本账号时幂等成功；绑定到其他账号时拒绝，避免账号合并或接管。
+     */
+    @Transactional
+    public AuthResponses.AuthData bindWeChatMiniProgram(AuthRequests.BindWeChatMiniProgramRequest request) {
+        AuthMapper.UserWithPassword found = mapper.selectUserByEmail(normalizeEmail(request.email()));
+        AuthMapper.UserRow user = authenticatePasswordUser(found, request.password());
+        if (!AppConstants.ROLE_USER.equals(user.role())) {
+            throw unauthorized();
+        }
+        WeChatMiniProgramClient.WeChatIdentity weChat = weChatMiniProgramClient.exchangeCode(request.code());
+        UserIdentityMapper.IdentityRow identity = userIdentityMapper.selectForUpdate(
+                WECHAT_MINI_PROGRAM_PROVIDER, weChat.openId()
+        );
+        if (identity == null) {
+            insertWeChatIdentity(user.id(), weChat);
+        } else if (!identity.userId().equals(user.id())) {
+            throw new ApiException(HttpStatus.CONFLICT, "WECHAT_ACCOUNT_ALREADY_BOUND", "该微信已绑定其他账号");
+        }
+        return completeWeChatLogin(user);
+    }
+
     /** 作用：校验已按入口定位的用户并签发会话。输入：可空用户、密码。输出：认证响应。逻辑：统一处理状态、正式/临时密码与登录时间。 */
     private AuthResponses.AuthData authenticate(AuthMapper.UserWithPassword found, String password) {
-        if (found == null || !AppConstants.USER_STATUS_ACTIVE.equals(found.status())
+        return completePasswordLogin(authenticatePasswordUser(found, password));
+    }
+
+    /** 作用：校验邮箱密码身份。输入：可空数据库用户、密码。输出：公开用户行。逻辑：微信专用账号没有密码时也统一拒绝邮箱登录。 */
+    private AuthMapper.UserRow authenticatePasswordUser(AuthMapper.UserWithPassword found, String password) {
+        if (found == null
+                || found.passwordHash() == null
+                || !AppConstants.USER_STATUS_ACTIVE.equals(found.status())
                 || !temporaryCredentialService.authenticate(
                 found.id(), found.passwordHash(), found.mustChangePassword(), password
         )) {
             throw unauthorized();
         }
-        mapper.updateLastLogin(found.id(), utcNow());
-        AuthMapper.UserRow user = new AuthMapper.UserRow(
+        return new AuthMapper.UserRow(
                 found.id(),
                 found.email(),
                 null,
@@ -138,7 +209,37 @@ public class AuthService {
                 found.mustChangePassword(),
                 found.authVersion()
         );
+    }
+
+    /** 作用：完成已验证密码用户的登录。输入：用户公开行。输出：新会话。逻辑：更新时间并签发Token。 */
+    private AuthResponses.AuthData completePasswordLogin(AuthMapper.UserRow user) {
+        mapper.updateLastLogin(user.id(), utcNow());
         return authData(user, issueRefreshToken(user.id(), null));
+    }
+
+    /** 作用：完成已绑定微信用户的登录。输入：用户公开行。输出：新会话。逻辑：只允许 ACTIVE 的普通用户通过小程序入口登录。 */
+    private AuthResponses.AuthData completeWeChatLogin(AuthMapper.UserRow user) {
+        if (!AppConstants.ROLE_USER.equals(user.role()) || !AppConstants.USER_STATUS_ACTIVE.equals(user.status())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "WECHAT_LOGIN_FAILED", "微信账号当前无法登录");
+        }
+        mapper.updateLastLogin(user.id(), utcNow());
+        return authData(user, issueRefreshToken(user.id(), null));
+    }
+
+    /** 作用：读取已绑定身份的用户。输入：用户ID。输出：公开用户行。逻辑：绑定指向不存在用户时统一为微信登录失败。 */
+    private AuthMapper.UserRow requiredUser(String userId) {
+        AuthMapper.UserRow user = mapper.selectUserByIdForUpdate(userId);
+        if (user == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "WECHAT_LOGIN_FAILED", "微信账号当前无法登录");
+        }
+        return user;
+    }
+
+    /** 作用：写入微信身份绑定。输入：业务用户和微信身份。输出：无。逻辑：openid 只以唯一索引和提供方标识保存。 */
+    private void insertWeChatIdentity(String userId, WeChatMiniProgramClient.WeChatIdentity weChat) {
+        userIdentityMapper.insert(new UserIdentityMapper.IdentityRow(
+                UUID.randomUUID().toString(), userId, WECHAT_MINI_PROGRAM_PROVIDER, weChat.openId(), weChat.unionId()
+        ));
     }
 
     /**

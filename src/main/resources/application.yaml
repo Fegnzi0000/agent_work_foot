@@ -15,6 +15,12 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 app:
+  wechat:
+    mini-program:
+      # 只允许通过环境变量注入；AppSecret 绝不能写入小程序、Git 或日志。
+      app-id: ${WECHAT_MINI_PROGRAM_APP_ID:}
+      app-secret: ${WECHAT_MINI_PROGRAM_APP_SECRET:}
+      code2-session-url: https://api.weixin.qq.com/sns/jscode2session
   admin:
     temporary-password-ttl: PT30M
     rate-limit:

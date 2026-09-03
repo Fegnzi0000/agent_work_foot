@@ -22,6 +22,9 @@ public interface AuthMapper {
     /** 作用：按管理员登录名读取登录资料。输入：标准化账号名。输出：用户与密码哈希，未找到时为 null。逻辑：仅供管理员网页入口校验。 */
     UserWithPassword selectAdminByLoginName(@Param("adminLoginName") String adminLoginName);
 
+    /** 作用：按用户ID锁定公开认证资料。输入：用户 ID。输出：用户或空。逻辑：微信身份已绑定后读取状态并签发会话。 */
+    UserRow selectUserByIdForUpdate(@Param("userId") String userId);
+
     /** 作用：更新成功登录时间。输入：用户 ID。输出：无。逻辑：只更新 last_login_at。 */
     void updateLastLogin(@Param("userId") String userId, @Param("loggedInAt") LocalDateTime loggedInAt);
 

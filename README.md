@@ -54,7 +54,10 @@ src/main/resources/db/migration
 ```text
 V1__initial_schema.sql
 V2__add_admin_login_name.sql
+V3__add_wechat_mini_program_identity.sql
 ```
+
+V3 新增微信小程序身份绑定，微信新用户允许没有邮箱和密码；后端通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`、`WECHAT_MINI_PROGRAM_APP_SECRET` 调用微信 `code2Session`，不会将 AppSecret 或 `session_key` 返回给小程序。
 
 本地开发处于可重新初始化阶段时，可以清空现有表后重新启动服务，让 Flyway 按顺序执行迁移创建完整结构。之后发生任何真实的表结构或初始数据变更，都必须新增新的版本文件，不能修改已经在其他环境执行过的迁移。
 

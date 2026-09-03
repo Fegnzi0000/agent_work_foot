@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 外部身份绑定；所有参数必须使用预编译绑定，openid 不写入应用日志。 -->
+<mapper namespace="com.hyf.agent_work_foot.auth.mapper.UserIdentityMapper">
+    <select id="selectForUpdate" resultType="com.hyf.agent_work_foot.auth.mapper.UserIdentityMapper$IdentityRow">
+        SELECT id,
+               user_id AS userId,
+               provider,
+               provider_subject AS providerSubject,
+               union_id AS unionId
+        FROM user_identities
+        WHERE provider = #{provider}
+          AND provider_subject = #{providerSubject}
+        FOR UPDATE
+    </select>
+
+    <insert id="insert">
+        INSERT INTO user_identities (id, user_id, provider, provider_subject, union_id)
+        VALUES (#{identity.id}, #{identity.userId}, #{identity.provider}, #{identity.providerSubject}, #{identity.unionId})
+    </insert>
+</mapper>

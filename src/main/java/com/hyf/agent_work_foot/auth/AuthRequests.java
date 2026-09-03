@@ -30,6 +30,18 @@ public final class AuthRequests {
     ) {
     }
 
+    /** 微信小程序登录请求：code 必须刚由 wx.login 取得，后端只使用一次。 */
+    public record WeChatMiniProgramLoginRequest(@NotBlank @Size(max = 1024) String code) {
+    }
+
+    /** 已有邮箱账号绑定微信：同一次请求完成微信 code 校验、密码校验和身份绑定。 */
+    public record BindWeChatMiniProgramRequest(
+            @NotBlank @Size(max = 1024) String code,
+            @NotBlank @Email @Size(max = 254) String email,
+            @NotBlank @Pattern(regexp = "^[A-Za-z0-9_]{6,20}$") String password
+    ) {
+    }
+
     /** 管理员网页登录请求：独立管理员账号和密码，不接受邮箱。 */
     public record AdminLoginRequest(
             @NotBlank @Pattern(regexp = "^[A-Za-z][A-Za-z0-9_]{2,31}$") String account,

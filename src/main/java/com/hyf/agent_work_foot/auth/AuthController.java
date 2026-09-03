@@ -59,6 +59,27 @@ public class AuthController {
         return ApiResponse.ok(authService.login(request), "登录成功");
     }
 
+    /** 微信小程序一键登录：提交 wx.login 的一次性 code，成功后复用现有 JWT 会话响应。 */
+    @PostMapping("/wechat/mini-program/login")
+    public ApiResponse<AuthResponses.AuthData> weChatMiniProgramLogin(
+            @Valid @RequestBody AuthRequests.WeChatMiniProgramLoginRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        rateLimiter.checkWeChatLogin(servletRequest.getRemoteAddr());
+        return ApiResponse.ok(authService.loginWithWeChatMiniProgram(request.code()), "微信登录成功");
+    }
+
+    /** 已有邮箱用户绑定微信身份：不创建第二个业务账号，绑定成功后直接签发原账号会话。 */
+    @PostMapping("/wechat/mini-program/bind")
+    public ApiResponse<AuthResponses.AuthData> bindWeChatMiniProgram(
+            @Valid @RequestBody AuthRequests.BindWeChatMiniProgramRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        rateLimiter.checkLogin(servletRequest.getRemoteAddr(), request.email().trim().toLowerCase(Locale.ROOT));
+        rateLimiter.checkWeChatLogin(servletRequest.getRemoteAddr());
+        return ApiResponse.ok(authService.bindWeChatMiniProgram(request), "微信绑定成功");
+    }
+
     /**
      * 作用：轮换 Refresh Token 并签发新的 Token 对。
      *

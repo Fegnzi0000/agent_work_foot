@@ -29,6 +29,12 @@ public class InMemoryAuthRateLimiter implements AuthRateLimiter {
         check("login:" + ip + ":" + email, limits.loginMaxAttempts(), limits.loginWindow());
     }
 
+    /** 作用：校验微信登录频率。输入：IP。输出：允许时无返回，超限时抛异常。逻辑：避免攻击者用大量一次性code消耗后端与微信接口配额。 */
+    @Override
+    public void checkWeChatLogin(String ip) {
+        check("wechat-login:" + ip, limits.loginMaxAttempts(), limits.loginWindow());
+    }
+
     /** 作用：校验注册频率。输入：IP。输出：允许时无返回，超限时抛异常。逻辑：按注册键检查窗口。 */
     @Override
     public void checkRegistration(String ip) {

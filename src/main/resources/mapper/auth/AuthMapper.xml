@@ -72,6 +72,24 @@
         FOR UPDATE
     </select>
 
+    <!-- 作用：按用户ID锁定公开认证资料；输入：用户ID；输出：用户或空。 -->
+    <select id="selectUserByIdForUpdate" resultType="com.hyf.agent_work_foot.auth.mapper.AuthMapper$UserRow">
+        SELECT u.id,
+               u.email,
+               u.admin_login_name AS adminLoginName,
+               u.nickname,
+               u.avatar_object_key AS avatarObjectKey,
+               r.code AS role,
+               u.status,
+               u.onboarding_completed AS onboardingCompleted,
+               u.must_change_password AS mustChangePassword,
+               u.auth_version AS authVersion
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.is_active = 1
+        WHERE u.id = #{userId}
+        FOR UPDATE
+    </select>
+
     <!--
       作用：更新一次成功登录时间。
       输入：userId。输出：影响一行。

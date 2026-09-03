@@ -88,6 +88,19 @@ class AuthUserPreferenceHttpContractTests extends AbstractMySqlIntegrationTest {
     }
 
     /**
+     * 作用：验证未配置微信 AppID/AppSecret 时接口安全失败。
+     * 输入：格式正确的微信临时 code。输出：503 与稳定错误码。
+     * 逻辑：不访问真实微信网络，防止本地或测试环境误把未配置当作无效用户凭据。
+     */
+    @Test
+    void reportsUnavailableWhenWeChatLoginIsNotConfigured() throws Exception {
+        MvcResult result = perform(MockMvcRequestBuilders.post("/api/v1/auth/wechat/mini-program/login"),
+                Map.of("code", "test-wechat-login-code"), null);
+        assertEquals(503, result.getResponse().getStatus());
+        assertEquals("WECHAT_LOGIN_UNAVAILABLE", json(result).path("code").asText());
+    }
+
+    /**
      * 作用：验证当前用户、引导、偏好保存和预算约束。
      * 输入：真实 USER Token 与引导/补丁请求。输出：401、200 和 400。
      * 逻辑：用户归属只取认证主体，空列表表示清空对应偏好。
