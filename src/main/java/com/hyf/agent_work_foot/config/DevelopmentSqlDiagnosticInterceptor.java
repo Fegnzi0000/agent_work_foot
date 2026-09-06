@@ -76,10 +76,9 @@ public class DevelopmentSqlDiagnosticInterceptor implements Interceptor {
         if (parameterObject == null || boundSql.getParameterMappings().isEmpty()) {
             return "{}";
         }
-        MetaObject metaObject = org.apache.ibatis.reflection.SystemMetaObject.forObject(parameterObject);
-        return boundSql.getParameterMappings().stream()
-                .map(mapping -> mapping.getProperty() + "=" + displayValue(mapping, boundSql, metaObject, parameterObject))
-                .collect(java.util.stream.Collectors.joining(", ", "{", "}"));
+        // Field-name blacklists miss aliases, nested records and medical free text.
+        // Keep SQL placeholders, mapper, timing and row count; never serialize values.
+        return "{values=[REDACTED], count=" + boundSql.getParameterMappings().size() + "}";
     }
 
     private String displayValue(ParameterMapping mapping, BoundSql boundSql, MetaObject metaObject, Object parameterObject) {

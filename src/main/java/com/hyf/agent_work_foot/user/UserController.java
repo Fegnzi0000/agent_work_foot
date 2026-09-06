@@ -82,7 +82,7 @@ public class UserController {
      * 逻辑：先消费用户加IP限流配额，再由用户服务委托认证模块完成安全事务。
      */
     @PostMapping("/change-password")
-    @PreAuthorize("hasAuthority('ACCOUNT_CHANGE_PASSWORD')")
+    @PreAuthorize("hasRole('ADMIN') and hasAuthority('ACCOUNT_CHANGE_PASSWORD')")
     public ApiResponse<Void> changePassword(@Valid @RequestBody UserRequests.ChangePasswordRequest request,
                                             Authentication authentication, HttpServletRequest servletRequest) {
         accountSecurityRateLimiter.check(authentication.getName(), servletRequest.getRemoteAddr());
@@ -99,8 +99,6 @@ public class UserController {
     @PreAuthorize("hasAuthority('ACCOUNT_CANCEL')")
     public ApiResponse<Void> cancelAccount(@Valid @RequestBody UserRequests.CancelAccountRequest request,
                                            Authentication authentication, HttpServletRequest servletRequest) {
-        accountSecurityRateLimiter.check(authentication.getName(), servletRequest.getRemoteAddr());
-        userService.cancelAccount(authentication.getName(), request);
-        return ApiResponse.ok(null, "账号已注销");
+        throw new com.hyf.agent_work_foot.common.ApiException(org.springframework.http.HttpStatus.GONE, "CONSUMER_PASSWORD_REMOVED", "请通过微信身份验证注销账号");
     }
 }

@@ -69,11 +69,6 @@ public class AdminController {
             Authentication authentication,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(
-                service.createTemporaryPassword(
-                        authentication.getName(), userId.toString(), request.getRemoteAddr()
-                ),
-                "创建成功"
-        ));
+        throw new com.hyf.agent_work_foot.common.ApiException(HttpStatus.GONE, "CONSUMER_PASSWORD_REMOVED", "普通用户使用微信身份，不提供临时密码");
     }
 }

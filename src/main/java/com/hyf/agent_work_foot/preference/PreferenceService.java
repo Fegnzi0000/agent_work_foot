@@ -32,11 +32,13 @@ public class PreferenceService {
 
     private final PreferenceMapper mapper;
     private final MoneyParser moneyParser;
+    private final com.hyf.agent_work_foot.auth.ConsentService consent;
 
     /** 作用：注入偏好数据访问接口。输入：PreferenceMapper。输出：服务实例。逻辑：保存依赖。 */
-    public PreferenceService(PreferenceMapper mapper, MoneyParser moneyParser) {
+    public PreferenceService(PreferenceMapper mapper, MoneyParser moneyParser, com.hyf.agent_work_foot.auth.ConsentService consent) {
         this.mapper = mapper;
         this.moneyParser = moneyParser;
+        this.consent = consent;
     }
 
     /**
@@ -130,6 +132,7 @@ public class PreferenceService {
      * <p>输入：用户 ID、分类和完整新列表。输出：无。逻辑：先删除旧项，再校验并写入新项；调用方事务保证中途失败不留下半成品。</p>
      */
     private void replaceItems(String userId, String kind, List<PreferenceRequests.PreferenceItem> items) {
+        if ("MEDICAL_ALLERGY".equals(kind) && !items.isEmpty()) consent.requireMedical(userId);
         mapper.deleteItems(userId, kind);
         for (PreferenceRequests.PreferenceItem item : items) {
             if (AppConstants.PREFERENCE_PRESET.equals(item.type())) {
@@ -177,7 +180,7 @@ public class PreferenceService {
         return new PreferenceResponses.PreferencesData(
                 budget.enabled(),
                 budget.dailyBudget() == null ? null : moneyParser.format(budget.dailyBudget()),
-                items(userId, "MEDICAL_ALLERGY"),
+                consent.state(userId).medicalAllowed() ? items(userId, "MEDICAL_ALLERGY") : List.of(),
                 items(userId, "DIETARY_RESTRICTION"),
                 items(userId, "DISLIKE"),
                 items(userId, "TASTE")

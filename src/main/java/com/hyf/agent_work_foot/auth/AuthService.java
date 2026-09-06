@@ -41,6 +41,7 @@ public class AuthService {
     private final TemporaryCredentialService temporaryCredentialService;
     private final UserIdentityMapper userIdentityMapper;
     private final WeChatMiniProgramClient weChatMiniProgramClient;
+    private final ConsentService consentService;
 
     /**
      * 作用：注入认证流程依赖。
@@ -57,7 +58,8 @@ public class AuthService {
             Clock clock,
             TemporaryCredentialService temporaryCredentialService,
             UserIdentityMapper userIdentityMapper,
-            WeChatMiniProgramClient weChatMiniProgramClient
+            WeChatMiniProgramClient weChatMiniProgramClient,
+            ConsentService consentService
     ) {
         this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
@@ -68,6 +70,7 @@ public class AuthService {
         this.temporaryCredentialService = temporaryCredentialService;
         this.userIdentityMapper = userIdentityMapper;
         this.weChatMiniProgramClient = weChatMiniProgramClient;
+        this.consentService = consentService;
     }
 
     /**
@@ -131,12 +134,14 @@ public class AuthService {
      * 逻辑：后端先向微信换取 openid；已绑定则登录原账号，未绑定则创建无邮箱无密码的新用户及默认食物后绑定。
      */
     @Transactional
-    public AuthResponses.AuthData loginWithWeChatMiniProgram(String code) {
-        WeChatMiniProgramClient.WeChatIdentity weChat = weChatMiniProgramClient.exchangeCode(code);
+    public AuthResponses.AuthData loginWithWeChatMiniProgram(AuthRequests.WeChatMiniProgramLoginRequest request) {
+        ConsentService.validate(request);
+        WeChatMiniProgramClient.WeChatIdentity weChat = weChatMiniProgramClient.exchangeCode(request.code());
         UserIdentityMapper.IdentityRow identity = userIdentityMapper.selectForUpdate(
                 WECHAT_MINI_PROGRAM_PROVIDER, weChat.openId()
         );
         if (identity != null) {
+            consentService.acceptLogin(identity.userId(), request);
             return completeWeChatLogin(requiredUser(identity.userId()));
         }
 
@@ -155,6 +160,7 @@ public class AuthService {
         mapper.insertUser(user, null);
         foodInitializationService.initializeDefaults(user.id());
         insertWeChatIdentity(user.id(), weChat);
+        consentService.acceptLogin(user.id(), request);
         return completeWeChatLogin(user);
     }
 
@@ -257,6 +263,7 @@ public class AuthService {
                 || !AppConstants.USER_STATUS_ACTIVE.equals(token.status())) {
             throw tokenInvalid();
         }
+        if (AppConstants.ROLE_USER.equals(token.role()) && !consentService.state(token.userId()).current()) throw tokenInvalid();
         if (mapper.revokeById(token.id(), AppConstants.TOKEN_REVOKE_ROTATED, utcNow()) != 1) {
             throw tokenInvalid();
         }
