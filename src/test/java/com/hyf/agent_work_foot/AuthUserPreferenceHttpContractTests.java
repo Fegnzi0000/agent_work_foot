@@ -16,11 +16,11 @@ class AuthUserPreferenceHttpContractTests extends AbstractMySqlIntegrationTest {
     @Test void keepsProfileAndPreferencesScopedToAuthenticatedUser() throws Exception {
         var user=register("preferences").path("data"); String token=user.path("accessToken").asText();
         assertEquals(200,perform(MockMvcRequestBuilders.patch("/api/v1/users/me/profile"),Map.of("nickname","个人昵称"),token).getResponse().getStatus());
-        assertEquals(200,perform(MockMvcRequestBuilders.patch("/api/v1/users/me/preferences"),Map.of("medicalAllergies",List.of(Map.of("type","CUSTOM","value","花生"))),token).getResponse().getStatus());
+        assertEquals(200,perform(MockMvcRequestBuilders.patch("/api/v1/users/me/preferences"),Map.of("dislikes",List.of(Map.of("type","CUSTOM","value","香菜"))),token).getResponse().getStatus());
         var read=json(perform(MockMvcRequestBuilders.get("/api/v1/users/me/preferences"),null,token)).path("data");
-        assertEquals(1,read.path("medicalAllergies").size());
+        assertEquals(1,read.path("dislikes").size());
         String other=register("other").path("data").path("accessToken").asText();
-        assertEquals(0,json(perform(MockMvcRequestBuilders.get("/api/v1/users/me/preferences"),null,other)).path("data").path("medicalAllergies").size());
+        assertEquals(0,json(perform(MockMvcRequestBuilders.get("/api/v1/users/me/preferences"),null,other)).path("data").path("dislikes").size());
     }
     @Test void refreshRotatesAndLogoutRevokesToken() throws Exception {
         var user=register("refresh").path("data");

@@ -80,7 +80,6 @@ public abstract class AbstractMySqlIntegrationTest {
         // Fixture creation is internal: it must not reopen removed public email endpoints.
         var data = fixtureAuth.register(new com.hyf.agent_work_foot.auth.AuthRequests.RegisterRequest(email,"Pass_123","Pass_123"));
         fixtureConsent.acceptLogin(data.user().id(),new com.hyf.agent_work_foot.auth.AuthRequests.WeChatMiniProgramLoginRequest("fixture",true,com.hyf.agent_work_foot.auth.ConsentService.VERSION,com.hyf.agent_work_foot.auth.ConsentService.VERSION,"ADULT"));
-        fixtureConsent.medical(data.user().id(),true,com.hyf.agent_work_foot.auth.ConsentService.VERSION);
         return objectMapper.valueToTree(com.hyf.agent_work_foot.common.ApiResponse.ok(data,"fixture"));
     }
 

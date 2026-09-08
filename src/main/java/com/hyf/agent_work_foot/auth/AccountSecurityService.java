@@ -54,7 +54,6 @@ public class AccountSecurityService {
         if (mapper.cancelAccount(userId, account.authVersion(), now) != 1) throw tokenInvalid();
         mapper.revokeAllRefreshTokens(userId, now, AppConstants.TOKEN_REVOKE_ACCOUNT_CANCELLED);
         mapper.revokeTemporaryPasswords(userId, now);
-        consent.medical(userId, false, null);
     }
 
     /**

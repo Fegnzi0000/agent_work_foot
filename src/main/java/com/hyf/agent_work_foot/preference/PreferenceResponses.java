@@ -21,7 +21,6 @@ public final class PreferenceResponses {
     public record PreferencesData(
             boolean budgetEnabled,
             String dailyBudget,
-            List<PreferenceItem> medicalAllergies,
             List<PreferenceItem> dietaryRestrictions,
             List<PreferenceItem> dislikes,
             List<PreferenceItem> tastePreferences

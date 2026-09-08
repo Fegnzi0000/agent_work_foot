@@ -8,13 +8,22 @@ spring:
       fail-on-unknown-properties: true
 
 server:
-  port: 8080
+  port: ${PORT:8080}
+  shutdown: graceful
 
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
 
 app:
+  cache:
+    redis:
+      enabled: false
+      food-pool-ttl: PT5M
+      preference-options-ttl: PT6H
+      admin-dashboard-ttl: PT30S
+  redis:
+    enabled: false
   wechat:
     mini-program:
       # 只允许通过环境变量注入；AppSecret 绝不能写入小程序、Git 或日志。

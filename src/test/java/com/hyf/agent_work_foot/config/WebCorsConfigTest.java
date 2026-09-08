@@ -20,7 +20,7 @@ class WebCorsConfigTest {
 
     @Test
     void allowsConfiguredLocalPreflightRequest() throws Exception {
-        MockHttpServletRequest request = preflight("http://localhost:5173");
+        MockHttpServletRequest request = preflight("http://localhost:5173", "PATCH");
         MockHttpServletResponse response = new MockHttpServletResponse();
         CorsConfiguration configuration = source.getCorsConfiguration(request);
 
@@ -30,17 +30,29 @@ class WebCorsConfigTest {
     }
 
     @Test
+    void allowsEveryBrowserMethodUsedByTheApi() throws Exception {
+        for (String method : List.of("GET", "POST", "PUT", "PATCH", "DELETE")) {
+            MockHttpServletRequest request = preflight("http://localhost:5173", method);
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            CorsConfiguration configuration = source.getCorsConfiguration(request);
+
+            assertTrue(new DefaultCorsProcessor().processRequest(configuration, request, response));
+            assertTrue(response.getHeader("Access-Control-Allow-Methods").contains(method));
+        }
+    }
+
+    @Test
     void rejectsUnconfiguredOrigin() throws Exception {
-        MockHttpServletRequest request = preflight("http://localhost:3000");
+        MockHttpServletRequest request = preflight("http://localhost:3000", "GET");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         assertFalse(new DefaultCorsProcessor().processRequest(source.getCorsConfiguration(request), request, response));
     }
 
-    private MockHttpServletRequest preflight(String origin) {
+    private MockHttpServletRequest preflight(String origin, String method) {
         MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", "/api/v1/admin/dashboard");
         request.addHeader("Origin", origin);
-        request.addHeader("Access-Control-Request-Method", "GET");
+        request.addHeader("Access-Control-Request-Method", method);
         request.addHeader("Access-Control-Request-Headers", "Authorization");
         return request;
     }

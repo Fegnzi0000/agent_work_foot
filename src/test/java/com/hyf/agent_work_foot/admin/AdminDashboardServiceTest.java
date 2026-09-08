@@ -5,12 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper;
 import com.hyf.agent_work_foot.common.ApiException;
+import com.hyf.agent_work_foot.config.RedisCacheProperties;
+import com.hyf.agent_work_foot.config.RedisJsonCache;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import static org.mockito.Mockito.mock;
 
 /** Dashboard日期边界、零值补齐和比例格式的无数据库单元测试。 */
 class AdminDashboardServiceTest {
@@ -18,7 +23,7 @@ class AdminDashboardServiceTest {
 
     @Test
     void defaultsToSevenShanghaiDaysAndFillsMissingDailyValues() {
-        AdminDashboardService service = new AdminDashboardService(new StubMapper(), clock);
+        AdminDashboardService service = new AdminDashboardService(new StubMapper(), clock, cache(), cacheProperties());
 
         AdminDashboardResponses.DashboardData result = service.dashboard(null, null);
 
@@ -33,12 +38,20 @@ class AdminDashboardServiceTest {
 
     @Test
     void rejectsIncompleteOrOversizedDateRange() {
-        AdminDashboardService service = new AdminDashboardService(new StubMapper(), clock);
+        AdminDashboardService service = new AdminDashboardService(new StubMapper(), clock, cache(), cacheProperties());
 
         assertEquals("VALIDATION_FAILED", assertThrows(ApiException.class,
                 () -> service.dashboard(LocalDate.of(2026, 8, 1), null)).code());
         assertEquals("VALIDATION_FAILED", assertThrows(ApiException.class,
                 () -> service.dashboard(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 4, 1))).code());
+    }
+
+    private RedisJsonCache cache() {
+        return new RedisJsonCache(mock(StringRedisTemplate.class), new ObjectMapper(), cacheProperties());
+    }
+
+    private RedisCacheProperties cacheProperties() {
+        return new RedisCacheProperties(false, java.time.Duration.ofMinutes(5), java.time.Duration.ofHours(6), java.time.Duration.ofSeconds(30));
     }
 
     private static class StubMapper implements AdminDashboardMapper {

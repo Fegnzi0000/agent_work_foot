@@ -39,19 +39,8 @@ class ConsentLifecycleIntegrationTests {
         var body = Map.of("code",code,"accepted",true,"termsVersion",ConsentService.VERSION,"privacyVersion",ConsentService.VERSION,"ageBand",age);
         return json.readTree(mvc.perform(post("/api/v1/auth/wechat/mini-program/login").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("data");
     }
-    @Test void adultMedicalConsentCanBeWithdrawnAndDataIsActuallyRemoved() throws Exception {
-        var user = login(UUID.randomUUID().toString(),"ADULT");
-        String bearer = "Bearer "+user.get("accessToken").asText();
-        mvc.perform(patch("/api/v1/users/me/preferences").header("Authorization",bearer).contentType(MediaType.APPLICATION_JSON).content("{\"medicalAllergies\":[{\"type\":\"CUSTOM\",\"value\":\"花生\"}]}" )).andExpect(status().isForbidden());
-        mvc.perform(put("/api/v1/users/me/consent/medical").header("Authorization",bearer).contentType(MediaType.APPLICATION_JSON).content("{\"accepted\":true,\"version\":\""+ConsentService.VERSION+"\"}")).andExpect(status().isOk());
-        mvc.perform(patch("/api/v1/users/me/preferences").header("Authorization",bearer).contentType(MediaType.APPLICATION_JSON).content("{\"medicalAllergies\":[{\"type\":\"CUSTOM\",\"value\":\"花生\"}]}" )).andExpect(status().isOk());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM preference_items WHERE user_id=? AND kind='MEDICAL_ALLERGY'", Integer.class,user.get("user").get("id").asText()));
-        mvc.perform(put("/api/v1/users/me/consent/medical").header("Authorization",bearer).contentType(MediaType.APPLICATION_JSON).content("{\"accepted\":false}")).andExpect(status().isOk());
-        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM preference_items WHERE user_id=? AND kind='MEDICAL_ALLERGY'", Integer.class,user.get("user").get("id").asText()));
-    }
-    @Test void minorCannotEnableMedicalOrUpgradeAgeByLoggingInAgain() throws Exception {
+    @Test void minorCannotUpgradeAgeByLoggingInAgain() throws Exception {
         String code=UUID.randomUUID().toString(); var user=login(code,"AGE_14_17");
-        mvc.perform(put("/api/v1/users/me/consent/medical").header("Authorization","Bearer "+user.get("accessToken").asText()).contentType(MediaType.APPLICATION_JSON).content("{\"accepted\":true,\"version\":\""+ConsentService.VERSION+"\"}")).andExpect(status().isForbidden());
         assertThrows(ApiException.class, () -> auth.loginWithWeChatMiniProgram(new AuthRequests.WeChatMiniProgramLoginRequest(code,true,ConsentService.VERSION,ConsentService.VERSION,"ADULT")));
     }
     @Test void oldEmailSessionCannotAccessBusinessOrRefresh() throws Exception {

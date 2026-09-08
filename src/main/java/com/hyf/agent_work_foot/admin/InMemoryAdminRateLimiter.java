@@ -7,10 +7,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.HttpStatus;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /** 单实例管理员临时密码固定窗口限流器，分别限制管理员总量和管理员到目标账号的频率。 */
 @Component
+@ConditionalOnProperty(prefix = "app.redis", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class InMemoryAdminRateLimiter implements AdminRateLimiter {
     private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();
     private final AdminProperties properties;

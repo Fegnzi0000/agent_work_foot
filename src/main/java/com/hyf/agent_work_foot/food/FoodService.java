@@ -34,6 +34,7 @@ public class FoodService {
     private final MoneyParser priceParser;
     private final FoodContentValidator validator;
     private final Clock clock;
+    private final FoodQueryService queryService;
 
     /**
      * 作用：创建食物池应用服务。
@@ -41,13 +42,14 @@ public class FoodService {
      * 逻辑：保存模块依赖，所有公开用例统一经这些组件访问数据和规则。
      */
     public FoodService(FoodOptionMapper foodMapper, FoodOptionTagMapper tagMapper, FoodNormalizer normalizer,
-                       MoneyParser priceParser, FoodContentValidator validator, Clock clock) {
+                       MoneyParser priceParser, FoodContentValidator validator, Clock clock, FoodQueryService queryService) {
         this.foodMapper = foodMapper;
         this.tagMapper = tagMapper;
         this.normalizer = normalizer;
         this.priceParser = priceParser;
         this.validator = validator;
         this.clock = clock;
+        this.queryService = queryService;
     }
 
     /** 作用：分页查询当前用户食物池。输入：用户、0基分页和筛选。输出：标准分页响应。逻辑：复杂SQL分页后批量组装标签。 */
@@ -78,6 +80,7 @@ public class FoodService {
         } catch (DuplicateKeyException exception) {
             throw duplicate();
         }
+        queryService.evictUserFoodPoolAfterCommit(userId);
         return requiredResponse(userId, entity.getId());
     }
 
@@ -115,6 +118,7 @@ public class FoodService {
                 insertTags(foodId, prepared.tags());
             }
         } catch (DuplicateKeyException exception) { throw duplicate(); }
+        queryService.evictUserFoodPoolAfterCommit(userId);
         return requiredResponse(userId, foodId);
     }
 
@@ -122,6 +126,7 @@ public class FoodService {
     @Transactional
     public void delete(String userId, String foodId) {
         if (foodMapper.softDelete(userId, foodId, LocalDateTime.now(clock)) == 0) throw notFound();
+        queryService.evictUserFoodPoolAfterCommit(userId);
     }
 
     /**
@@ -140,6 +145,7 @@ public class FoodService {
         try {
             foodMapper.insert(entity);
             insertTags(entity.getId(), prepared.tags());
+            queryService.evictUserFoodPoolAfterCommit(userId);
             return entity.getId();
         } catch (DuplicateKeyException exception) {
             String id = findDuplicateId(userId, prepared.activeKey());

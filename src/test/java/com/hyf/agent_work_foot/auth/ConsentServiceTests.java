@@ -13,10 +13,4 @@ class ConsentServiceTests {
         assertThrows(ApiException.class, () -> ConsentService.validate(new AuthRequests.WeChatMiniProgramLoginRequest("code", true, ConsentService.VERSION, ConsentService.VERSION, "UNDER_14")));
         assertDoesNotThrow(() -> ConsentService.validate(new AuthRequests.WeChatMiniProgramLoginRequest("code", true, ConsentService.VERSION, ConsentService.VERSION, "ADULT")));
     }
-    @Test void missingConsentCannotSaveMedicalDataOrEnableIt() {
-        var jdbc = mock(JdbcTemplate.class);
-        var consent = new ConsentService(jdbc);
-        assertThrows(ApiException.class, () -> consent.requireMedical("user"));
-        assertThrows(ApiException.class, () -> consent.medical("user", true, ConsentService.VERSION));
-    }
 }

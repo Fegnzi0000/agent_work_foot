@@ -21,12 +21,11 @@ public class ConsentService {
         }
     }
     public State state(String id) {
-        var rows = jdbc.query("SELECT terms_version,privacy_version,age_band,medical_version FROM user_consents WHERE user_id=?",
-                (rs, n) -> new State(VERSION.equals(rs.getString(1)) && VERSION.equals(rs.getString(2)), rs.getString(3),
-                        VERSION.equals(rs.getString(1)) && VERSION.equals(rs.getString(2)) && "ADULT".equals(rs.getString(3)) && VERSION.equals(rs.getString(4))), id);
-        return rows.isEmpty() ? new State(false, null, false) : rows.getFirst();
+        var rows = jdbc.query("SELECT terms_version,privacy_version,age_band FROM user_consents WHERE user_id=?",
+                (rs, n) -> new State(VERSION.equals(rs.getString(1)) && VERSION.equals(rs.getString(2)), rs.getString(3)), id);
+        return rows.isEmpty() ? new State(false, null) : rows.getFirst();
     }
-    /** Caller and medical writes share a user-row lock to serialize consent withdrawal with data writes. */
+    /** 登录同意写入通过用户行锁串行化，避免并发登录覆盖年龄段。 */
     @Transactional
     public void acceptLogin(String id, AuthRequests.WeChatMiniProgramLoginRequest request) {
         validate(request);
@@ -35,33 +34,11 @@ public class ConsentService {
         if ("AGE_14_17".equals(previous.ageBand()) && "ADULT".equals(request.ageBand())) {
             throw new ApiException(HttpStatus.CONFLICT, "AGE_CORRECTION_REQUIRED", "年龄段更正请联系开发者核验，不能通过重新登录绕过年龄限制");
         }
-        if (!previous.current() || !request.ageBand().equals(previous.ageBand())) {
-            jdbc.update("UPDATE user_consents SET medical_version=NULL,medical_accepted_at=NULL WHERE user_id=?", id);
-        }
         jdbc.update("INSERT INTO user_consents(user_id,terms_version,privacy_version,age_band,accepted_at) VALUES(?,?,?,?,UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE terms_version=VALUES(terms_version),privacy_version=VALUES(privacy_version),age_band=VALUES(age_band),accepted_at=VALUES(accepted_at)", id, VERSION, VERSION, request.ageBand());
         event(id, "LOGIN", true);
-    }
-    public void requireMedical(String id) {
-        jdbc.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE", String.class, id);
-        if (!state(id).medicalAllowed()) throw new ApiException(HttpStatus.FORBIDDEN, "MEDICAL_CONSENT_REQUIRED", "仅成年人单独同意后可保存医疗过敏信息");
-    }
-    @Transactional
-    public State medical(String id, boolean accepted, String version) {
-        jdbc.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE", String.class, id);
-        var current = state(id);
-        if (accepted && (!VERSION.equals(version) || !current.current() || !"ADULT".equals(current.ageBand()))) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "MEDICAL_CONSENT_REQUIRED", "仅成年人可同意当前医疗过敏信息处理说明");
-        }
-        if (accepted) jdbc.update("UPDATE user_consents SET medical_version=?,medical_accepted_at=UTC_TIMESTAMP(3) WHERE user_id=?", VERSION, id);
-        else {
-            jdbc.update("UPDATE user_consents SET medical_version=NULL,medical_accepted_at=NULL WHERE user_id=?", id);
-            jdbc.update("DELETE FROM preference_items WHERE user_id=? AND kind='MEDICAL_ALLERGY'", id);
-        }
-        event(id, "MEDICAL", accepted);
-        return state(id);
     }
     private void event(String id, String kind, boolean accepted) {
         jdbc.update("INSERT INTO consent_events(id,user_id,kind,version,accepted,created_at) VALUES(?,?,?,?,?,UTC_TIMESTAMP(3))", UUID.randomUUID().toString(), id, kind, VERSION, accepted);
     }
-    public record State(boolean current, String ageBand, boolean medicalAllowed) { }
+    public record State(boolean current, String ageBand) { }
 }

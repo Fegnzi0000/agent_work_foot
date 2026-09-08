@@ -149,6 +149,8 @@ powershell -ExecutionPolicy Bypass -File .\本地环境\manage-local-accounts.ps
 
 ## 生产环境要点
 
+完整的容器、HTTPS、环境变量、备份恢复和回滚流程见 `docs/production-deployment.md`；Redis 下一阶段的接入边界见 `docs/redis-integration-plan.md`。
+
 - 使用 `prod` Profile，并通过环境变量提供数据库连接和 JWT 密钥。
 - 必填数据库变量：`AGENT_WORK_FOOT_DB_URL`、`AGENT_WORK_FOOT_DB_USERNAME`、`AGENT_WORK_FOOT_DB_PASSWORD`。
 - 必填 JWT 变量：`APP_AUTH_JWT_ACTIVE_KEY_ID`、`APP_AUTH_JWT_ACTIVE_SECRET`。
