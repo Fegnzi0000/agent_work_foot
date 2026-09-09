@@ -26,12 +26,11 @@ public final class PreferenceRequests {
     ) {
     }
 
-    /** 首次引导请求：包含可选昵称、必填预算开关和四类必填偏好列表。 */
+    /** 首次引导请求：包含可选昵称、必填预算开关和三类必填偏好列表。 */
     public record OnboardingRequest(
             @Size(max = 20) String nickname,
             @NotNull Boolean budgetEnabled,
             @JsonDeserialize(using = StrictStringDeserializer.class) String dailyBudget,
-            @NotNull @Size(max = 50) List<@Valid PreferenceItem> medicalAllergies,
             @NotNull @Size(max = 50) List<@Valid PreferenceItem> dietaryRestrictions,
             @NotNull @Size(max = 50) List<@Valid PreferenceItem> dislikes,
             @NotNull @Size(max = 50) List<@Valid PreferenceItem> tastePreferences
@@ -42,7 +41,6 @@ public final class PreferenceRequests {
     public record PreferencesPatchRequest(
             Boolean budgetEnabled,
             @JsonDeserialize(using = StrictStringDeserializer.class) String dailyBudget,
-            @Size(max = 50) List<@Valid PreferenceItem> medicalAllergies,
             @Size(max = 50) List<@Valid PreferenceItem> dietaryRestrictions,
             @Size(max = 50) List<@Valid PreferenceItem> dislikes,
             @Size(max = 50) List<@Valid PreferenceItem> tastePreferences

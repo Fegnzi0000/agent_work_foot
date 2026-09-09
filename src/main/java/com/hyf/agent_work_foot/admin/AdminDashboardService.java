@@ -3,6 +3,8 @@ package com.hyf.agent_work_foot.admin;
 import com.hyf.agent_work_foot.admin.mapper.AdminDashboardMapper;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.FieldErrorDetail;
+import com.hyf.agent_work_foot.config.RedisCacheProperties;
+import com.hyf.agent_work_foot.config.RedisJsonCache;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -26,14 +28,26 @@ public class AdminDashboardService {
 
     private final AdminDashboardMapper mapper;
     private final Clock clock;
+    private final RedisJsonCache cache;
+    private final RedisCacheProperties cacheProperties;
 
-    public AdminDashboardService(AdminDashboardMapper mapper, Clock clock) {
+    public AdminDashboardService(AdminDashboardMapper mapper, Clock clock, RedisJsonCache cache,
+                                 RedisCacheProperties cacheProperties) {
         this.mapper = mapper;
         this.clock = clock;
+        this.cache = cache;
+        this.cacheProperties = cacheProperties;
     }
 
     public AdminDashboardResponses.DashboardData dashboard(LocalDate requestedStart, LocalDate requestedEnd) {
         DateRange range = resolveRange(requestedStart, requestedEnd);
+        String key = "awf:v1:cache:admin-dashboard:" + range.start() + ':' + range.end();
+        return cache.getOrLoad(key, new com.fasterxml.jackson.databind.ObjectMapper().getTypeFactory()
+                        .constructType(AdminDashboardResponses.DashboardData.class),
+                cacheProperties.adminDashboardTtl(), () -> loadDashboard(range));
+    }
+
+    private AdminDashboardResponses.DashboardData loadDashboard(DateRange range) {
         LocalDate today = LocalDate.now(clock.withZone(BUSINESS_ZONE));
         LocalDateTime rangeStart = utcDateTime(range.start());
         LocalDateTime rangeEnd = utcDateTime(range.end().plusDays(1));

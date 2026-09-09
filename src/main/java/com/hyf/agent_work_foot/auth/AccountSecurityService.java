@@ -19,17 +19,41 @@ public class AccountSecurityService {
     private final AccountSecurityMapper mapper;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
+    private final ConsentService consent;
+    private final WeChatMiniProgramClient wechat;
+    private final com.hyf.agent_work_foot.auth.mapper.UserIdentityMapper identities;
 
     /** 作用：注入账号安全依赖。输入：安全Mapper、密码编码器和UTC时钟。输出：服务实例。逻辑：不处理HTTP对象。 */
-    public AccountSecurityService(AccountSecurityMapper mapper, PasswordEncoder passwordEncoder, Clock clock) {
+    public AccountSecurityService(AccountSecurityMapper mapper, PasswordEncoder passwordEncoder, Clock clock,
+                                  ConsentService consent, WeChatMiniProgramClient wechat,
+                                  com.hyf.agent_work_foot.auth.mapper.UserIdentityMapper identities) {
         this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
+        this.consent = consent; this.wechat = wechat; this.identities = identities;
     }
 
     /** 作用：读取JWT认证所需当前账号状态。输入：JWT用户ID。输出：状态或空。逻辑：供认证Filter逐请求核对版本和角色。 */
     public AccountSecurityMapper.AccessState accessState(String userId) {
-        return mapper.selectAccessState(userId);
+        var state = mapper.selectAccessState(userId);
+        if (state != null && AppConstants.ROLE_USER.equals(state.role()) && !consent.state(userId).current()) return null;
+        return state;
+    }
+
+    /** Reauthentication never registers or transfers an identity. */
+    @Transactional
+    public void cancelWithWeChat(String userId, String code, String confirmation) {
+        if (!"CANCEL".equals(confirmation)) throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "请确认注销");
+        var wechatIdentity = wechat.exchangeCode(code);
+        var identity = identities.selectForUpdate("WECHAT_MINI_PROGRAM", wechatIdentity.openId());
+        if (identity == null || !userId.equals(identity.userId())) throw new ApiException(HttpStatus.FORBIDDEN, "WECHAT_IDENTITY_MISMATCH", "当前微信与登录账号不一致，未注销");
+        var account = activeLocked(userId);
+        var state = mapper.selectAccessState(userId);
+        if (state == null || !AppConstants.ROLE_USER.equals(state.role())) throw tokenInvalid();
+        var now = utcNow();
+        if (mapper.cancelAccount(userId, account.authVersion(), now) != 1) throw tokenInvalid();
+        mapper.revokeAllRefreshTokens(userId, now, AppConstants.TOKEN_REVOKE_ACCOUNT_CANCELLED);
+        mapper.revokeTemporaryPasswords(userId, now);
     }
 
     /**

@@ -26,7 +26,10 @@ public class WeChatMiniProgramClient {
 
     /** 作用：注入微信配置。输入：配置。输出：客户端实例。逻辑：使用 Spring 内置无状态 HTTP 客户端，不依赖额外自动配置。 */
     public WeChatMiniProgramClient(WeChatMiniProgramProperties properties, ObjectMapper objectMapper) {
-        this.restClient = RestClient.create();
+        var httpClient = java.net.http.HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(2)).build();
+        var factory = new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(java.time.Duration.ofSeconds(3));
+        this.restClient = RestClient.builder().requestFactory(factory).build();
         this.properties = properties;
         this.objectMapper = objectMapper;
     }

@@ -6,10 +6,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.HttpStatus;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /** 单实例账号安全固定窗口限流器；多实例时可替换Redis或网关实现而不改变用户接口。 */
 @Component
+@ConditionalOnProperty(prefix = "app.redis", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class InMemoryAccountSecurityRateLimiter implements AccountSecurityRateLimiter {
     private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();
     private final AccountSecurityProperties properties;

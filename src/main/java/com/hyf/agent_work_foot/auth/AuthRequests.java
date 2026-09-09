@@ -4,6 +4,8 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.AssertTrue;
 
 /**
  * 认证接口的请求 DTO 集合。
@@ -31,7 +33,13 @@ public final class AuthRequests {
     }
 
     /** 微信小程序登录请求：code 必须刚由 wx.login 取得，后端只使用一次。 */
-    public record WeChatMiniProgramLoginRequest(@NotBlank @Size(max = 1024) String code) {
+    public record WeChatMiniProgramLoginRequest(
+            @NotBlank @Size(max = 1024) String code,
+            @NotNull @AssertTrue Boolean accepted,
+            @NotBlank @Pattern(regexp = "2026-09-06\\.1") String termsVersion,
+            @NotBlank @Pattern(regexp = "2026-09-06\\.1") String privacyVersion,
+            @NotBlank @Pattern(regexp = "AGE_14_17|ADULT") String ageBand) {
+        public WeChatMiniProgramLoginRequest(String code) { this(code, null, null, null, null); }
     }
 
     /** 已有邮箱账号绑定微信：同一次请求完成微信 code 校验、密码校验和身份绑定。 */

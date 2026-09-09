@@ -39,9 +39,7 @@ public class AuthController {
             @Valid @RequestBody AuthRequests.RegisterRequest request,
             HttpServletRequest servletRequest
     ) {
-        rateLimiter.checkRegistration(servletRequest.getRemoteAddr());
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(authService.register(request), "注册成功"));
+        throw new com.hyf.agent_work_foot.common.ApiException(HttpStatus.GONE, "EMAIL_AUTH_REMOVED", "普通用户请使用微信登录");
     }
 
     /**
@@ -55,8 +53,7 @@ public class AuthController {
             @Valid @RequestBody AuthRequests.LoginRequest request,
             HttpServletRequest servletRequest
     ) {
-        rateLimiter.checkLogin(servletRequest.getRemoteAddr(), request.email().trim().toLowerCase(Locale.ROOT));
-        return ApiResponse.ok(authService.login(request), "登录成功");
+        throw new com.hyf.agent_work_foot.common.ApiException(HttpStatus.GONE, "EMAIL_AUTH_REMOVED", "普通用户请使用微信登录");
     }
 
     /** 微信小程序一键登录：提交 wx.login 的一次性 code，成功后复用现有 JWT 会话响应。 */
@@ -66,7 +63,7 @@ public class AuthController {
             HttpServletRequest servletRequest
     ) {
         rateLimiter.checkWeChatLogin(servletRequest.getRemoteAddr());
-        return ApiResponse.ok(authService.loginWithWeChatMiniProgram(request.code()), "微信登录成功");
+        return ApiResponse.ok(authService.loginWithWeChatMiniProgram(request), "微信登录成功");
     }
 
     /** 已有邮箱用户绑定微信身份：不创建第二个业务账号，绑定成功后直接签发原账号会话。 */
@@ -75,9 +72,7 @@ public class AuthController {
             @Valid @RequestBody AuthRequests.BindWeChatMiniProgramRequest request,
             HttpServletRequest servletRequest
     ) {
-        rateLimiter.checkLogin(servletRequest.getRemoteAddr(), request.email().trim().toLowerCase(Locale.ROOT));
-        rateLimiter.checkWeChatLogin(servletRequest.getRemoteAddr());
-        return ApiResponse.ok(authService.bindWeChatMiniProgram(request), "微信绑定成功");
+        throw new com.hyf.agent_work_foot.common.ApiException(HttpStatus.GONE, "EMAIL_AUTH_REMOVED", "邮箱绑定入口已关闭");
     }
 
     /**

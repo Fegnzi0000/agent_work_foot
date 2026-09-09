@@ -3,6 +3,8 @@ package com.hyf.agent_work_foot.food;
 import com.hyf.agent_work_foot.food.entity.FoodOptionEntity;
 import com.hyf.agent_work_foot.food.mapper.FoodOptionMapper;
 import com.hyf.agent_work_foot.food.mapper.FoodOptionTagMapper;
+import com.hyf.agent_work_foot.config.RedisCacheProperties;
+import com.hyf.agent_work_foot.config.RedisJsonCache;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.ArrayList;
@@ -15,10 +17,15 @@ import org.springframework.stereotype.Service;
 public class FoodQueryService {
     private final FoodOptionMapper foodMapper;
     private final FoodOptionTagMapper tagMapper;
+    private final RedisJsonCache cache;
+    private final RedisCacheProperties cacheProperties;
 
-    public FoodQueryService(FoodOptionMapper foodMapper, FoodOptionTagMapper tagMapper) {
+    public FoodQueryService(FoodOptionMapper foodMapper, FoodOptionTagMapper tagMapper, RedisJsonCache cache,
+                            RedisCacheProperties cacheProperties) {
         this.foodMapper = foodMapper;
         this.tagMapper = tagMapper;
+        this.cache = cache;
+        this.cacheProperties = cacheProperties;
     }
 
     /** 作用：按用户读取有效食物快照。输入：用户ID、食物ID。输出：快照或空。逻辑：只通过food Mapper访问并批量规则化标签。 */
@@ -35,6 +42,16 @@ public class FoodQueryService {
      * 逻辑：主表一次查询、标签一次IN查询后在内存组装，避免Slot候选出现N+1。
      */
     public List<FoodSnapshot> findAllActiveSnapshots(String userId) {
+        return cache.getOrLoad(cacheKey(userId), cacheType(), cacheProperties.foodPoolTtl(),
+                () -> loadAllActiveSnapshots(userId));
+    }
+
+    /** 食物池写成功后由调用方触发，确保抽取候选和详情读取回到最新数据。 */
+    public void evictUserFoodPoolAfterCommit(String userId) {
+        cache.evictAfterCommit(cacheKey(userId));
+    }
+
+    private List<FoodSnapshot> loadAllActiveSnapshots(String userId) {
         List<FoodOptionEntity> foods = foodMapper.selectAllOwnedActive(userId);
         if (foods.isEmpty()) return List.of();
         Map<String, List<String>> tags = new LinkedHashMap<>();
@@ -42,6 +59,15 @@ public class FoodQueryService {
                 .forEach(row -> tags.computeIfAbsent(row.foodOptionId(), key -> new ArrayList<>()).add(row.tag()));
         return foods.stream().map(food -> new FoodSnapshot(food.getId(), food.getName(), food.getCategory(),
                 food.getDefaultPrice(), List.copyOf(tags.getOrDefault(food.getId(), List.of())))).toList();
+    }
+
+    private com.fasterxml.jackson.databind.JavaType cacheType() {
+        return new com.fasterxml.jackson.databind.ObjectMapper().getTypeFactory()
+                .constructCollectionType(List.class, FoodSnapshot.class);
+    }
+
+    private String cacheKey(String userId) {
+        return "awf:v1:cache:user-food-pool:" + userId;
     }
 
     /** 下游业务使用的不可变食物快照。 */

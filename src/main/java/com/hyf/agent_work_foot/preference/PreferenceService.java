@@ -3,6 +3,8 @@ package com.hyf.agent_work_foot.preference;
 import com.hyf.agent_work_foot.common.ApiException;
 import com.hyf.agent_work_foot.common.AppConstants;
 import com.hyf.agent_work_foot.common.MoneyParser;
+import com.hyf.agent_work_foot.config.RedisCacheProperties;
+import com.hyf.agent_work_foot.config.RedisJsonCache;
 import com.hyf.agent_work_foot.preference.mapper.PreferenceMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -24,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PreferenceService {
     private static final List<String> KINDS = List.of(
-            "MEDICAL_ALLERGY",
             "DIETARY_RESTRICTION",
             "DISLIKE",
             "TASTE"
@@ -32,11 +33,16 @@ public class PreferenceService {
 
     private final PreferenceMapper mapper;
     private final MoneyParser moneyParser;
+    private final RedisJsonCache cache;
+    private final RedisCacheProperties cacheProperties;
 
     /** 作用：注入偏好数据访问接口。输入：PreferenceMapper。输出：服务实例。逻辑：保存依赖。 */
-    public PreferenceService(PreferenceMapper mapper, MoneyParser moneyParser) {
+    public PreferenceService(PreferenceMapper mapper, MoneyParser moneyParser, RedisJsonCache cache,
+                             RedisCacheProperties cacheProperties) {
         this.mapper = mapper;
         this.moneyParser = moneyParser;
+        this.cache = cache;
+        this.cacheProperties = cacheProperties;
     }
 
     /**
@@ -45,6 +51,13 @@ public class PreferenceService {
      * <p>输入：无。输出：按固定分类排序的预设项映射。逻辑：先初始化全部分类，保证没有预设的分类也能返回空列表。</p>
      */
     public PreferenceResponses.OptionsData options() {
+        return cache.getOrLoad("awf:v1:cache:preference-options",
+                new com.fasterxml.jackson.databind.ObjectMapper().getTypeFactory()
+                        .constructType(PreferenceResponses.OptionsData.class),
+                cacheProperties.preferenceOptionsTtl(), this::loadOptions);
+    }
+
+    private PreferenceResponses.OptionsData loadOptions() {
         Map<String, List<PreferenceResponses.PreferenceItem>> grouped = new LinkedHashMap<>();
         KINDS.forEach(kind -> grouped.put(kind, new ArrayList<>()));
         for (PreferenceMapper.PresetRow row : mapper.selectActivePresets()) {
@@ -77,7 +90,6 @@ public class PreferenceService {
         if (request.budgetEnabled()) {
             upsertBudget(userId, true, parseBudget(request.dailyBudget()));
         }
-        replaceItems(userId, "MEDICAL_ALLERGY", request.medicalAllergies());
         replaceItems(userId, "DIETARY_RESTRICTION", request.dietaryRestrictions());
         replaceItems(userId, "DISLIKE", request.dislikes());
         replaceItems(userId, "TASTE", request.tastePreferences());
@@ -106,7 +118,6 @@ public class PreferenceService {
             }
             upsertBudget(userId, true, parseBudget(request.dailyBudget()));
         }
-        replaceWhenPresent(userId, "MEDICAL_ALLERGY", request.medicalAllergies());
         replaceWhenPresent(userId, "DIETARY_RESTRICTION", request.dietaryRestrictions());
         replaceWhenPresent(userId, "DISLIKE", request.dislikes());
         replaceWhenPresent(userId, "TASTE", request.tastePreferences());
@@ -177,7 +188,6 @@ public class PreferenceService {
         return new PreferenceResponses.PreferencesData(
                 budget.enabled(),
                 budget.dailyBudget() == null ? null : moneyParser.format(budget.dailyBudget()),
-                items(userId, "MEDICAL_ALLERGY"),
                 items(userId, "DIETARY_RESTRICTION"),
                 items(userId, "DISLIKE"),
                 items(userId, "TASTE")

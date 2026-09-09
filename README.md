@@ -1,5 +1,7 @@
 # AI 干饭搭子后端
 
+2026-09-06 改造交接与配套前端版本见 [团队同步与改造交接说明](docs/团队同步与改造交接说明.md)。普通用户现仅支持主动同意后的微信登录；管理员仍使用独立账号密码。
+
 面向微信小程序用户端和网页管理员端的后端服务。当前项目以单体应用方式运行：小程序与管理网页共用同一套后端、数据库和认证体系，但接口权限与业务边界相互隔离。
 
 ## 当前范围
@@ -22,7 +24,7 @@
 
 ## 已实现的管理员功能
 
-- 管理员邮箱密码登录、JWT 鉴权和退出登录。
+- 管理员账号密码登录、JWT 鉴权和退出登录（不是邮箱登录）。
 - 管理首页统计：用户、饮食记录、转盘记录、近七日趋势等。
 - 用户列表：按邮箱、昵称、用户状态、注册日期范围筛选并分页。
 - 用户详情与用户状态更新。
@@ -53,13 +55,11 @@ src/main/resources/db/migration
 
 ```text
 V1__initial_schema.sql
-V2__add_admin_login_name.sql
-V3__add_wechat_mini_program_identity.sql
 ```
 
-V3 新增微信小程序身份绑定，微信新用户允许没有邮箱和密码；后端通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`、`WECHAT_MINI_PROGRAM_APP_SECRET` 调用微信 `code2Session`，不会将 AppSecret 或 `session_key` 返回给小程序。
+上线 V1 已整合管理员登录名、微信小程序身份绑定和用户同意记录。微信新用户允许没有邮箱和密码；后端通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`、`WECHAT_MINI_PROGRAM_APP_SECRET` 调用微信 `code2Session`，不会将 AppSecret 或 `session_key` 返回给小程序。
 
-本地开发处于可重新初始化阶段时，可以清空现有表后重新启动服务，让 Flyway 按顺序执行迁移创建完整结构。之后发生任何真实的表结构或初始数据变更，都必须新增新的版本文件，不能修改已经在其他环境执行过的迁移。
+本地开发处于可重新初始化阶段时，可以清空现有表后重新启动服务，让 Flyway 执行 V1 创建完整结构。V1 发布并执行后，任何真实的表结构或初始数据变更都必须新增新的版本文件，不能修改已经发布到环境的迁移。
 
 ## 本地启动
 
@@ -127,39 +127,27 @@ http://localhost:5173
 - 查询行数或更新影响行数；
 - 执行耗时与异常类型。
 
-密码、令牌、授权信息等敏感字段会在摘要中脱敏。该诊断拦截器仅在 `dev` 环境加载，测试和生产环境不会输出这类详细日志。
+所有 SQL 参数值均不输出，仅保留参数数量，避免过敏信息、微信身份或凭据泄漏。该诊断拦截器仅在 `dev` 环境加载；使用 dev 的本机测试也会记录脱敏日志。
 
 ## 本地联调数据
 
-本地已准备过管理员和演示用户数据时，可使用：
+不提供固定明文密码。既有邮箱账号仅为历史测试数据，公开邮箱入口已关闭。微信首次登录自动初始化默认食物；本机管理员凭据在各自 Windows 账户的加密配置中管理，不应提交 Git。
 
-| 类型 | 账号 | 密码 | 说明 |
-| --- | --- | --- | --- |
-| 管理员 | `admin` | `123456` | 网页管理员账号；关联邮箱为 `admin@local.test`，仅限本地开发数据库。 |
-| 演示用户 | `demo.user01@local.test` 至 `demo.user12@local.test` | `User_123` | 包含正常、禁用、注销等状态及关联业务数据。 |
+## 创建管理员与维护已注销账号
 
-这些账号不是 Flyway 的固定种子数据；重新清空数据库并执行 V1 后，需要按本地联调数据脚本或说明重新写入。完整数据范围和 SQL 见：
-
-```text
-E:\work\gpt_work\管理员网页本地联调数据.md
-```
-
-## 将已有用户提升为管理员
-
-管理员账号不提供公开注册入口。先通过正常注册流程创建用户，再在本地使用一次性引导 Profile 将指定邮箱提升为 `ADMIN`：
+管理员不提供公开注册入口。将 `docs/local-windows-scripts` 中脚本复制到工作区同级 `本地环境` 后，在工作区执行：
 
 ```powershell
-$env:SPRING_PROFILES_ACTIVE = 'dev,bootstrap-admin'
-$env:APP_ADMIN_BOOTSTRAP_EMAIL = '已注册用户邮箱'
-$env:APP_ADMIN_BOOTSTRAP_ACCOUNT = '管理员登录账号'
-mvn spring-boot:run
+powershell -ExecutionPolicy Bypass -File .\本地环境\manage-local-accounts.ps1 -Operation create-admin
 ```
 
-该 Profile 以非 Web 方式运行，完成提升后会退出。管理员账号为 3 至 32 位字母、数字或下划线，且以字母开头；它不接受角色参数。
+账号和密码在本机交互输入，密码保存为 BCrypt 哈希；重复运行不重置已有密码。工具启动在 loopback 随机端口并在完成后退出。原依赖邮箱注册的引导流程不再作为新环境初始化方式。预览/清理已注销普通用户的操作见交接文档，不能直接只删 users 一行。
 
 生产环境应通过受控运维流程执行，不应暴露为普通 HTTP 接口。
 
 ## 生产环境要点
+
+完整的容器、HTTPS、环境变量、备份恢复和回滚流程见 `docs/production-deployment.md`；Redis 下一阶段的接入边界见 `docs/redis-integration-plan.md`。
 
 - 使用 `prod` Profile，并通过环境变量提供数据库连接和 JWT 密钥。
 - 必填数据库变量：`AGENT_WORK_FOOT_DB_URL`、`AGENT_WORK_FOOT_DB_USERNAME`、`AGENT_WORK_FOOT_DB_PASSWORD`。

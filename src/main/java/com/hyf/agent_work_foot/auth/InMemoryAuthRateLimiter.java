@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.HttpStatus;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
  * <p>读取外部阈值配置并按键计数；不适用于多实例共享限流，部署扩展时应替换实现而不是修改 Controller。</p>
  */
 @Component
+@ConditionalOnProperty(prefix = "app.redis", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class InMemoryAuthRateLimiter implements AuthRateLimiter {
     private final AuthProperties.RateLimit limits;
     private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();

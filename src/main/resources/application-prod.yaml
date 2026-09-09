@@ -1,0 +1,60 @@
+spring:
+  data:
+    redis:
+      host: ${AGENT_WORK_FOOT_REDIS_HOST}
+      port: ${AGENT_WORK_FOOT_REDIS_PORT:6379}
+      username: ${AGENT_WORK_FOOT_REDIS_USERNAME:default}
+      password: ${AGENT_WORK_FOOT_REDIS_PASSWORD}
+      ssl:
+        enabled: ${AGENT_WORK_FOOT_REDIS_SSL:true}
+      connect-timeout: ${AGENT_WORK_FOOT_REDIS_CONNECT_TIMEOUT:PT1S}
+      timeout: ${AGENT_WORK_FOOT_REDIS_COMMAND_TIMEOUT:PT1S}
+  datasource:
+    url: ${AGENT_WORK_FOOT_DB_URL}
+    username: ${AGENT_WORK_FOOT_DB_USERNAME}
+    password: ${AGENT_WORK_FOOT_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${AGENT_WORK_FOOT_DB_POOL_MAX_SIZE:20}
+      minimum-idle: ${AGENT_WORK_FOOT_DB_POOL_MIN_IDLE:5}
+      connection-timeout: ${AGENT_WORK_FOOT_DB_CONNECTION_TIMEOUT_MS:3000}
+      validation-timeout: ${AGENT_WORK_FOOT_DB_VALIDATION_TIMEOUT_MS:1000}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+app:
+  cache:
+    redis:
+      enabled: true
+  redis:
+    # 限流尚未启用；Redis 连接配置由 spring.data.redis 提供给后续缓存。
+    enabled: false
+  wechat:
+    mini-program:
+      app-id: ${WECHAT_MINI_PROGRAM_APP_ID}
+      app-secret: ${WECHAT_MINI_PROGRAM_APP_SECRET}
+  web:
+    cors:
+      allowed-origins:
+        - ${AGENT_WORK_FOOT_ADMIN_ORIGIN}
+  auth:
+    jwt:
+      active-key-id: ${AGENT_WORK_FOOT_JWT_ACTIVE_KEY_ID}
+      active-secret: ${AGENT_WORK_FOOT_JWT_ACTIVE_SECRET}
+      previous-key-id: ${AGENT_WORK_FOOT_JWT_PREVIOUS_KEY_ID:}
+      previous-secret: ${AGENT_WORK_FOOT_JWT_PREVIOUS_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true

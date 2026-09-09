@@ -1,0 +1,10 @@
+.git
+.idea
+.mvn
+target
+*.iml
+*.log
+.env
+.env.*
+src/main/resources/application-dev.yaml
+docs/local-windows-scripts

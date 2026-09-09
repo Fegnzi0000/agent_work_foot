@@ -34,7 +34,7 @@ public abstract class AbstractMySqlIntegrationTest {
             .withPassword("test");
 
     static {
-        MYSQL.start();
+        if (System.getenv("CONSENT_TEST_DB_URL") == null) MYSQL.start();
     }
 
     @Autowired
@@ -51,6 +51,8 @@ public abstract class AbstractMySqlIntegrationTest {
 
     @Autowired
     private JwtService jwtService;
+    @Autowired private com.hyf.agent_work_foot.auth.AuthService fixtureAuth;
+    @Autowired private com.hyf.agent_work_foot.auth.ConsentService fixtureConsent;
 
     /**
      * 作用：将 Testcontainers 数据源接入 Spring。
@@ -59,9 +61,12 @@ public abstract class AbstractMySqlIntegrationTest {
      */
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
+        String local = System.getenv("CONSENT_TEST_DB_URL");
+        if (local != null && !local.contains("/agent_work_foot_consent_test?")) throw new IllegalStateException("Only isolated test database is allowed");
+        registry.add("spring.datasource.url", () -> local != null ? local : MYSQL.getJdbcUrl());
+        registry.add("spring.datasource.username", () -> local != null ? System.getenv("CONSENT_TEST_DB_USER") : MYSQL.getUsername());
+        registry.add("spring.datasource.password", () -> local != null ? System.getenv("CONSENT_TEST_DB_PASSWORD") : MYSQL.getPassword());
+        registry.add("app.auth.jwt.active-secret", () -> "isolated-tests-only-secret-012345678901234567890123456789");
         registry.add("app.auth.rate-limit.register-max-attempts", () -> 1000);
     }
 
@@ -72,12 +77,10 @@ public abstract class AbstractMySqlIntegrationTest {
      */
     protected JsonNode register(String prefix) throws Exception {
         String email = prefix + "+" + UUID.randomUUID() + "@example.com";
-        MvcResult result = perform(MockMvcRequestBuilders.post("/api/v1/auth/register"), Map.of(
-                "email", email,
-                "password", "Pass_123",
-                "confirmPassword", "Pass_123"
-        ), null);
-        return json(result);
+        // Fixture creation is internal: it must not reopen removed public email endpoints.
+        var data = fixtureAuth.register(new com.hyf.agent_work_foot.auth.AuthRequests.RegisterRequest(email,"Pass_123","Pass_123"));
+        fixtureConsent.acceptLogin(data.user().id(),new com.hyf.agent_work_foot.auth.AuthRequests.WeChatMiniProgramLoginRequest("fixture",true,com.hyf.agent_work_foot.auth.ConsentService.VERSION,com.hyf.agent_work_foot.auth.ConsentService.VERSION,"ADULT"));
+        return objectMapper.valueToTree(com.hyf.agent_work_foot.common.ApiResponse.ok(data,"fixture"));
     }
 
     /**
