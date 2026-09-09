@@ -1,5 +1,5 @@
--- 当前开发基线：创建最终表结构、索引和必要种子数据。
--- 新环境只存在USER与ADMIN两级角色；历史升级逻辑不属于初始化数据。
+-- 上线 V1 基线：创建最终表结构、索引和必要种子数据。
+-- 新环境只存在 USER 与 ADMIN 两级角色；此文件整合了上线前的历史演进。
 CREATE TABLE roles (
     id CHAR(36) NOT NULL,
     code VARCHAR(32) NOT NULL,
@@ -32,8 +32,9 @@ CREATE TABLE role_permissions (
 
 CREATE TABLE users (
     id CHAR(36) NOT NULL,
-    email VARCHAR(254) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    email VARCHAR(254) NULL,
+    admin_login_name VARCHAR(32) NULL,
+    password_hash VARCHAR(255) NULL,
     nickname VARCHAR(20) NOT NULL,
     avatar_object_key VARCHAR(512) NULL,
     role_id CHAR(36) NOT NULL,
@@ -47,9 +48,24 @@ CREATE TABLE users (
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_users_email (email),
+    UNIQUE KEY uk_users_admin_login_name (admin_login_name),
     KEY idx_users_status_created_at (status, created_at),
     KEY idx_users_role_id (role_id),
     KEY idx_users_dashboard_role_status_created_at (role_id, status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE user_identities (
+    id CHAR(36) NOT NULL,
+    user_id CHAR(36) NOT NULL,
+    provider VARCHAR(32) NOT NULL,
+    provider_subject VARCHAR(128) NOT NULL,
+    union_id VARCHAR(128) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_identities_provider_subject (provider, provider_subject),
+    KEY idx_user_identities_user_id (user_id),
+    KEY idx_user_identities_union_id (union_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE refresh_tokens (
@@ -95,6 +111,24 @@ CREATE TABLE admin_audit_logs (
     KEY idx_admin_audit_logs_target_created_at (target_user_id, created_at),
     KEY idx_admin_audit_logs_created_at_id (created_at, id),
     KEY idx_admin_audit_logs_action_result_created_at (action, result, created_at, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE user_consents (
+    user_id CHAR(36) NOT NULL PRIMARY KEY,
+    terms_version VARCHAR(32) NOT NULL,
+    privacy_version VARCHAR(32) NOT NULL,
+    age_band VARCHAR(16) NOT NULL,
+    accepted_at DATETIME(3) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE consent_events (
+    id CHAR(36) NOT NULL PRIMARY KEY,
+    user_id CHAR(36) NOT NULL,
+    kind VARCHAR(16) NOT NULL,
+    version VARCHAR(32) NOT NULL,
+    accepted BOOLEAN NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    KEY idx_consent_user(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE preference_presets (
@@ -263,10 +297,6 @@ INSERT INTO preference_presets (id, kind, code, label, sort_order) VALUES
     ('00000000-0000-4000-8000-000000000002', 'TASTE', 'TASTE_SPICY', '偏辣', 2),
     ('00000000-0000-4000-8000-000000000003', 'TASTE', 'TASTE_SWEET', '偏甜', 3),
     ('00000000-0000-4000-8000-000000000004', 'TASTE', 'TASTE_SALTY', '偏咸', 4),
-    ('00000000-0000-4000-8000-000000000005', 'MEDICAL_ALLERGY', 'ALLERGY_PEANUT', '花生过敏', 1),
-    ('00000000-0000-4000-8000-000000000006', 'MEDICAL_ALLERGY', 'ALLERGY_SEAFOOD', '海鲜过敏', 2),
-    ('00000000-0000-4000-8000-000000000007', 'MEDICAL_ALLERGY', 'ALLERGY_DAIRY', '乳制品过敏', 3),
-    ('00000000-0000-4000-8000-000000000008', 'MEDICAL_ALLERGY', 'ALLERGY_EGG', '蛋类过敏', 4),
     ('00000000-0000-4000-8000-000000000009', 'DIETARY_RESTRICTION', 'RESTRICTION_VEGETARIAN', '素食', 1),
     ('00000000-0000-4000-8000-000000000010', 'DIETARY_RESTRICTION', 'RESTRICTION_NO_PORK', '不吃猪肉', 2),
     ('00000000-0000-4000-8000-000000000011', 'DIETARY_RESTRICTION', 'RESTRICTION_NO_BEEF', '不吃牛肉', 3),
