@@ -10,7 +10,7 @@ CREATE TABLE roles (
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_roles_code (code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE permissions (
     id CHAR(36) NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE permissions (
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_permissions_code (code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE role_permissions (
     role_id CHAR(36) NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE role_permissions (
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (role_id, permission_id),
     KEY idx_role_permissions_permission_id (permission_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE users (
     id CHAR(36) NOT NULL,
@@ -52,7 +52,7 @@ CREATE TABLE users (
     KEY idx_users_status_created_at (status, created_at),
     KEY idx_users_role_id (role_id),
     KEY idx_users_dashboard_role_status_created_at (role_id, status, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE user_identities (
     id CHAR(36) NOT NULL,
@@ -66,7 +66,7 @@ CREATE TABLE user_identities (
     UNIQUE KEY uk_user_identities_provider_subject (provider, provider_subject),
     KEY idx_user_identities_user_id (user_id),
     KEY idx_user_identities_union_id (union_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE refresh_tokens (
     id CHAR(36) NOT NULL,
@@ -81,7 +81,7 @@ CREATE TABLE refresh_tokens (
     UNIQUE KEY uk_refresh_tokens_token_hash (token_hash),
     KEY idx_refresh_tokens_user_expires_at (user_id, expires_at),
     KEY idx_refresh_tokens_expires_at (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE temporary_passwords (
     id CHAR(36) NOT NULL,
@@ -95,7 +95,7 @@ CREATE TABLE temporary_passwords (
     PRIMARY KEY (id),
     KEY idx_temporary_passwords_user_expires_at (user_id, expires_at),
     KEY idx_temporary_passwords_expires_at (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE admin_audit_logs (
     id CHAR(36) NOT NULL,
@@ -111,7 +111,7 @@ CREATE TABLE admin_audit_logs (
     KEY idx_admin_audit_logs_target_created_at (target_user_id, created_at),
     KEY idx_admin_audit_logs_created_at_id (created_at, id),
     KEY idx_admin_audit_logs_action_result_created_at (action, result, created_at, id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE user_consents (
     user_id CHAR(36) NOT NULL PRIMARY KEY,
@@ -119,7 +119,7 @@ CREATE TABLE user_consents (
     privacy_version VARCHAR(32) NOT NULL,
     age_band VARCHAR(16) NOT NULL,
     accepted_at DATETIME(3) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE consent_events (
     id CHAR(36) NOT NULL PRIMARY KEY,
@@ -129,7 +129,7 @@ CREATE TABLE consent_events (
     accepted BOOLEAN NOT NULL,
     created_at DATETIME(3) NOT NULL,
     KEY idx_consent_user(user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE preference_presets (
     id CHAR(36) NOT NULL,
@@ -143,7 +143,7 @@ CREATE TABLE preference_presets (
     PRIMARY KEY (id),
     UNIQUE KEY uk_preference_presets_code (code),
     KEY idx_preference_presets_kind_active_sort (kind, is_active, sort_order)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE preference_items (
     id CHAR(36) NOT NULL,
@@ -157,7 +157,7 @@ CREATE TABLE preference_items (
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     KEY idx_preference_items_user_kind (user_id, kind)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE user_budget_histories (
     id CHAR(36) NOT NULL,
@@ -170,7 +170,7 @@ CREATE TABLE user_budget_histories (
     PRIMARY KEY (id),
     UNIQUE KEY uk_user_budget_histories_user_effective_date (user_id, effective_date),
     KEY idx_user_budget_histories_user_effective_date (user_id, effective_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE food_default_templates (
     id CHAR(36) NOT NULL,
@@ -187,7 +187,7 @@ CREATE TABLE food_default_templates (
     PRIMARY KEY (id),
     UNIQUE KEY uk_food_default_templates_version_name_category (template_version, normalized_name, category),
     KEY idx_food_default_templates_active_sort (is_active, sort_order)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE food_options (
     id CHAR(36) NOT NULL,
@@ -206,7 +206,7 @@ CREATE TABLE food_options (
     KEY idx_food_options_user_deleted_created_at (user_id, deleted_at, created_at),
     KEY idx_food_options_user_category_deleted_at (user_id, category, deleted_at),
     KEY idx_food_options_user_name (user_id, normalized_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE food_option_tags (
     id CHAR(36) NOT NULL,
@@ -217,7 +217,7 @@ CREATE TABLE food_option_tags (
     PRIMARY KEY (id),
     UNIQUE KEY uk_food_option_tags_food_tag (food_option_id, normalized_tag),
     KEY idx_food_option_tags_normalized_tag_food (normalized_tag, food_option_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE diet_records (
     id CHAR(36) NOT NULL,
@@ -242,7 +242,7 @@ CREATE TABLE diet_records (
     KEY idx_diet_records_user_source_date (user_id, source, business_date),
     KEY idx_diet_records_dashboard_deleted_business_source_user (deleted_at, business_date, source, user_id),
     KEY idx_diet_records_dashboard_deleted_created_user (deleted_at, created_at, user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE slot_spins (
     id CHAR(36) NOT NULL,
@@ -262,7 +262,7 @@ CREATE TABLE slot_spins (
     KEY idx_slot_spins_user_status_expires_at (user_id, status, expires_at),
     KEY idx_slot_spins_expires_at (expires_at),
     KEY idx_slot_spins_dashboard_created_status_user (created_at, status, user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO roles (id, code, name) VALUES
     ('00000000-0000-0000-0000-000000000101', 'USER', '普通用户'),
