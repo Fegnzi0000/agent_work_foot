@@ -38,7 +38,7 @@
 - Java 25
 - Spring Boot 4.1、Spring Security
 - MyBatis-Plus、MyBatis XML
-- MySQL 8.4
+- MySQL（本地开发可用 8.4；微信云托管当前为 5.7）
 - Flyway（数据库结构迁移）
 - JWT（管理员与用户认证）
 - Maven
@@ -59,6 +59,8 @@ V1__initial_schema.sql
 
 上线 V1 已整合管理员登录名、微信小程序身份绑定和用户同意记录。微信新用户允许没有邮箱和密码；后端通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`、`WECHAT_MINI_PROGRAM_APP_SECRET` 调用微信 `code2Session`，不会将 AppSecret 或 `session_key` 返回给小程序。
 
+V1 使用 `utf8mb4_unicode_ci`，已兼容微信云托管的 MySQL 5.7；不要改用仅 MySQL 8 支持的 `utf8mb4_0900_ai_ci`。新环境需先创建空数据库 `agent_work_foot`，再由 Flyway 创建表和初始化数据。若 V1 首次执行失败，不能直接反复发布；应在确认无业务数据后重建该数据库，再用修复后的 V1 重新执行。
+
 本地开发处于可重新初始化阶段时，可以清空现有表后重新启动服务，让 Flyway 执行 V1 创建完整结构。V1 发布并执行后，任何真实的表结构或初始数据变更都必须新增新的版本文件，不能修改已经发布到环境的迁移。
 
 ## 本地启动
@@ -67,7 +69,7 @@ V1__initial_schema.sql
 
 - JDK 25
 - Maven 3.9+
-- MySQL 8.4（可使用本机安装的 MySQL；Docker 仅在运行集成测试时需要）
+- MySQL（本地可使用 8.4；Docker 仅在运行集成测试时需要）
 - 已创建本地数据库并完成连接配置
 
 开发环境配置在 `src/main/resources/application-dev.yaml`。默认数据库连接为本机 MySQL 的 `3307` 端口；如本机配置不同，请按实际情况调整本地配置，不要提交账号密码。
@@ -150,8 +152,9 @@ powershell -ExecutionPolicy Bypass -File .\本地环境\manage-local-accounts.ps
 完整的容器、HTTPS、环境变量、备份恢复和回滚流程见 `docs/production-deployment.md`；Redis 下一阶段的接入边界见 `docs/redis-integration-plan.md`。
 
 - 使用 `prod` Profile，并通过环境变量提供数据库连接和 JWT 密钥。
-- 必填数据库变量：`AGENT_WORK_FOOT_DB_URL`、`AGENT_WORK_FOOT_DB_USERNAME`、`AGENT_WORK_FOOT_DB_PASSWORD`。
+- 必填数据库变量：`AGENT_WORK_FOOT_DB_URL`、`AGENT_WORK_FOOT_DB_USERNAME`、`AGENT_WORK_FOOT_DB_PASSWORD`。例如 `AGENT_WORK_FOOT_DB_URL` 应为完整 JDBC URL：`jdbc:mysql://数据库内网地址:3306/agent_work_foot?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC`，不能只填写 `主机:端口`。
 - 必填 JWT 变量：`APP_AUTH_JWT_ACTIVE_KEY_ID`、`APP_AUTH_JWT_ACTIVE_SECRET`。
+- Redis 端口变量使用 `${AGENT_WORK_FOOT_REDIS_PORT:6379}`：已设置时使用环境变量，未设置时默认 6379。仅在 Redis 确实启用 TLS 时设置 `AGENT_WORK_FOOT_REDIS_SSL=true`。
 - 将 CORS 白名单改为实际管理网页域名，不使用 `*` 通配符。
 - 保持 Flyway 启用，并让 Hibernate 只校验结构，不自动建表或改表。
 
