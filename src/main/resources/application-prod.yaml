@@ -37,6 +37,8 @@ app:
     mini-program:
       app-id: ${WECHAT_MINI_PROGRAM_APP_ID}
       app-secret: ${WECHAT_MINI_PROGRAM_APP_SECRET}
+      # 微信云托管“开放接口服务”的容器内代理地址；生产环境由云托管在内部转发至微信。
+      code2-session-url: ${WECHAT_MINI_PROGRAM_CODE2_SESSION_URL}
   web:
     cors:
       allowed-origins:

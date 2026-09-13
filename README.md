@@ -57,7 +57,7 @@ src/main/resources/db/migration
 V1__initial_schema.sql
 ```
 
-上线 V1 已整合管理员登录名、微信小程序身份绑定和用户同意记录。微信新用户允许没有邮箱和密码；后端通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`、`WECHAT_MINI_PROGRAM_APP_SECRET` 调用微信 `code2Session`，不会将 AppSecret 或 `session_key` 返回给小程序。
+上线 V1 已整合管理员登录名、微信小程序身份绑定和用户同意记录。微信新用户允许没有邮箱和密码；后端通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`、`WECHAT_MINI_PROGRAM_APP_SECRET` 调用微信 `code2Session`，不会将 AppSecret 或 `session_key` 返回给小程序。在微信云托管生产环境中，另设置 `WECHAT_MINI_PROGRAM_CODE2_SESSION_URL=http://api.weixin.qq.com/sns/jscode2session`，并在云调用中开启开放接口服务、放行 `/sns/jscode2session`。
 
 V1 使用 `utf8mb4_unicode_ci`，已兼容微信云托管的 MySQL 5.7；不要改用仅 MySQL 8 支持的 `utf8mb4_0900_ai_ci`。新环境需先创建空数据库 `agent_work_foot`，再由 Flyway 创建表和初始化数据。若 V1 首次执行失败，不能直接反复发布；应在确认无业务数据后重建该数据库，再用修复后的 V1 重新执行。
 
