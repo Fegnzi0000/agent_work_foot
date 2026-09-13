@@ -39,7 +39,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/admin/auth/login", "/actuator/health").permitAll()
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/admin/auth/login", "/actuator/health/**", "/__tcb_probe__").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint)
