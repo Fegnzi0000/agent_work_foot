@@ -67,9 +67,48 @@ public class WeChatMiniProgramClient {
             LOGGER.warn("[微信登录] code2Session 返回内容无法解析 type={}", exception.getClass().getSimpleName());
             throw new ApiException(HttpStatus.BAD_GATEWAY, "WECHAT_LOGIN_UNAVAILABLE", "微信登录服务暂时不可用");
         } catch (RestClientException exception) {
-            LOGGER.warn("[微信登录] code2Session 网络调用失败 type={}", exception.getClass().getSimpleName());
+            LOGGER.warn("[微信登录] code2Session 网络调用失败 endpointHost={} causeChain={}", endpointHost(), diagnosticCauseChain(exception, code));
             throw new ApiException(HttpStatus.BAD_GATEWAY, "WECHAT_LOGIN_UNAVAILABLE", "微信登录服务暂时不可用");
         }
+    }
+
+    /**
+     * 作用：输出排障所需的异常链，同时移除 URL 查询参数中的 AppSecret 与一次性登录 code。
+     * 输入：网络异常和本次 code。输出：可安全写入生产日志的文本。
+     */
+    private String diagnosticCauseChain(Throwable exception, String code) {
+        StringBuilder result = new StringBuilder();
+        Throwable current = exception;
+        while (current != null) {
+            if (!result.isEmpty()) {
+                result.append(" <- ");
+            }
+            result.append(current.getClass().getSimpleName());
+            String message = current.getMessage();
+            if (message != null && !message.isBlank()) {
+                result.append(": ").append(redact(message, code));
+            }
+            current = current.getCause();
+        }
+        return result.toString();
+    }
+
+    /** 返回固定的目标主机，日志不输出完整请求 URL，避免查询参数进入日志。 */
+    private String endpointHost() {
+        try {
+            URI endpoint = URI.create(properties.code2SessionUrl());
+            return endpoint.getHost() == null ? "unknown" : endpoint.getHost();
+        } catch (IllegalArgumentException exception) {
+            return "invalid-config";
+        }
+    }
+
+    /** 仅用于日志脱敏；不改变真实请求。 */
+    private String redact(String value, String code) {
+        return value
+                .replace(properties.appSecret(), "***")
+                .replace(code, "***")
+                .replaceAll("(?i)(secret|js_code)=([^&\\s]+)", "$1=***");
     }
 
     /** 微信侧已验证的业务身份；不携带 session_key，避免其离开本类。 */
